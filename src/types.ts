@@ -19,6 +19,7 @@ export interface WorkerProfile {
   longitude: number;
   is_verified: boolean;
   is_available: boolean;
+  portfolio?: string; // JSON string of URLs
   avg_rating?: number;
   name?: string; // From join
   phone?: string; // From join
@@ -30,6 +31,9 @@ export interface JobRequest {
   worker_id: number;
   service_type: string;
   description: string;
+  preferred_datetime?: string;
+  urgency: 'low' | 'medium' | 'high' | 'emergency';
+  photos?: string; // JSON string of URLs
   status: 'pending' | 'accepted' | 'declined' | 'in_progress' | 'completed' | 'cancelled';
   latitude: number;
   longitude: number;

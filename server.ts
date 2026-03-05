@@ -33,6 +33,7 @@ db.exec(`
     longitude REAL,
     is_verified BOOLEAN DEFAULT 0,
     is_available BOOLEAN DEFAULT 1,
+    portfolio TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
@@ -42,6 +43,9 @@ db.exec(`
     worker_id INTEGER NOT NULL,
     service_type TEXT NOT NULL,
     description TEXT,
+    preferred_datetime TEXT,
+    urgency TEXT CHECK(urgency IN ('low', 'medium', 'high', 'emergency')) DEFAULT 'medium',
+    photos TEXT,
     status TEXT CHECK(status IN ('pending', 'accepted', 'declined', 'in_progress', 'completed', 'cancelled')) DEFAULT 'pending',
     latitude REAL,
     longitude REAL,
@@ -73,6 +77,39 @@ db.exec(`
     FOREIGN KEY (worker_id) REFERENCES workers(id)
   );
 `);
+
+// Seeding Logic
+const seedData = () => {
+  const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as any;
+  if (userCount.count === 0) {
+    console.log("Seeding database with Kenyan examples...");
+    
+    const sampleWorkers = [
+      { name: "James Kamau", email: "kamau@example.com", phone: "0712345678", category: "Plumbing", bio: "Expert plumber with 10 years experience in Roysambu. Specializes in leak detection and bathroom fittings.", rate: 1200, verified: 1, portfolio: ['https://images.unsplash.com/photo-1584622650111-993a426fbf0a', 'https://images.unsplash.com/photo-1504148455328-c376907d081c'] },
+      { name: "Mary Atieno", email: "mary@example.com", phone: "0722345678", category: "Cleaning", bio: "Professional deep cleaning services for homes and offices. Very thorough and reliable.", rate: 800, verified: 1, portfolio: ['https://images.unsplash.com/photo-1581578731548-c64695cc6958', 'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac'] },
+      { name: "David Omondi", email: "david@example.com", phone: "0733345678", category: "Electrical", bio: "Certified electrician. I handle house wiring, socket repairs, and solar installations.", rate: 1500, verified: 0, portfolio: ['https://images.unsplash.com/photo-1621905251189-08b45d6a269e', 'https://images.unsplash.com/photo-1558211583-d28f610b15a0'] },
+      { name: "Sarah Njeri", email: "sarah@example.com", phone: "0744345678", category: "Painting", bio: "Creative painter and interior decorator. I bring life to your walls with quality finishes.", rate: 1000, verified: 1, portfolio: ['https://images.unsplash.com/photo-1589939705384-5185137a7f0f', 'https://images.unsplash.com/photo-1562664377-709f2c337eb2'] },
+      { name: "Peter Kipkorir", email: "peter@example.com", phone: "0755345678", category: "Carpentry", bio: "Custom furniture maker and repair expert. Quality woodwork guaranteed.", rate: 1300, verified: 0, portfolio: ['https://images.unsplash.com/photo-1533090161767-e6ffed986c88', 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85'] },
+      { name: "Faith Wambui", email: "faith@example.com", phone: "0766345678", category: "Technician", bio: "Appliance repair specialist. I fix fridges, microwaves, and washing machines.", rate: 1100, verified: 1, portfolio: ['https://images.unsplash.com/photo-1581092918056-0c4c3acd3789', 'https://images.unsplash.com/photo-1581092160562-40aa08e78837'] }
+    ];
+
+    for (const w of sampleWorkers) {
+      const userResult = db.prepare("INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, 'password123', 'worker')").run(w.name, w.email, w.phone);
+      const userId = userResult.lastInsertRowid;
+      db.prepare("INSERT INTO workers (user_id, category, experience_years, bio, hourly_rate, is_verified, portfolio) VALUES (?, ?, ?, ?, ?, ?, ?)").run(userId, w.category, 5, w.bio, w.rate, w.verified, JSON.stringify(w.portfolio));
+    }
+
+    // Add a sample customer
+    db.prepare("INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, 'password123', 'customer')").run("Sylvester Omondi", "omondi@example.com", "0700123456");
+    
+    // Add an admin user
+    db.prepare("INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, 'admin123', 'admin')").run("Admin User", "admin@handson.com", "0700000000");
+    
+    console.log("Seeding complete.");
+  }
+};
+
+seedData();
 
 async function startServer() {
   const app = express();
@@ -131,9 +168,13 @@ async function startServer() {
   });
 
   app.post("/api/jobs", (req, res) => {
-    const { customer_id, worker_id, service_type, description, latitude, longitude } = req.body;
+    const { customer_id, worker_id, service_type, description, latitude, longitude, preferred_datetime, urgency, photos } = req.body;
     try {
-      const result = db.prepare("INSERT INTO job_requests (customer_id, worker_id, service_type, description, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)").run(customer_id, worker_id, service_type, description, latitude, longitude);
+      const result = db.prepare(`
+        INSERT INTO job_requests 
+        (customer_id, worker_id, service_type, description, latitude, longitude, preferred_datetime, urgency, photos) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(customer_id, worker_id, service_type, description, latitude, longitude, preferred_datetime, urgency, photos);
       res.json({ success: true, jobId: result.lastInsertRowid });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -183,6 +224,54 @@ async function startServer() {
     res.json({ success: true, transactionId });
   });
 
+  // Admin Routes
+  app.post("/api/workers/:id/portfolio", (req, res) => {
+    const { id } = req.params;
+    const { portfolio } = req.body;
+    try {
+      db.prepare("UPDATE workers SET portfolio = ? WHERE id = ?").run(JSON.stringify(portfolio), id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/stats", (req, res) => {
+    const totalUsers = db.prepare("SELECT COUNT(*) as count FROM users").get() as any;
+    const totalWorkers = db.prepare("SELECT COUNT(*) as count FROM workers").get() as any;
+    const totalJobs = db.prepare("SELECT COUNT(*) as count FROM job_requests").get() as any;
+    const totalPayments = db.prepare("SELECT SUM(amount) as total FROM payments WHERE status = 'completed'").get() as any;
+    
+    res.json({
+      users: totalUsers.count,
+      workers: totalWorkers.count,
+      jobs: totalJobs.count,
+      revenue: totalPayments.total || 0
+    });
+  });
+
+  app.get("/api/admin/users", (req, res) => {
+    const users = db.prepare(`
+      SELECT u.*, w.id as worker_id, w.is_verified, w.category
+      FROM users u
+      LEFT JOIN workers w ON u.id = w.user_id
+      ORDER BY u.created_at DESC
+    `).all();
+    res.json(users);
+  });
+
+  app.get("/api/admin/jobs", (req, res) => {
+    const jobs = db.prepare(`
+      SELECT j.*, c.name as customer_name, w_u.name as worker_name
+      FROM job_requests j
+      JOIN users c ON j.customer_id = c.id
+      JOIN workers w ON j.worker_id = w.id
+      JOIN users w_u ON w.user_id = w_u.id
+      ORDER BY j.created_at DESC
+    `).all();
+    res.json(jobs);
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -196,6 +285,17 @@ async function startServer() {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   }
+
+  app.post("/api/admin/workers/:id/verify", (req, res) => {
+    const { id } = req.params;
+    const { is_verified } = req.body;
+    try {
+      db.prepare("UPDATE workers SET is_verified = ? WHERE id = ?").run(is_verified ? 1 : 0, id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);

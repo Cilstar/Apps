@@ -17,7 +17,10 @@ import {
   CreditCard,
   Search,
   Settings,
-  ShieldCheck
+  ShieldCheck,
+  Camera,
+  Calendar,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, WorkerProfile, JobRequest, SERVICE_CATEGORIES, ServiceCategory } from './types';
@@ -62,6 +65,9 @@ const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void })
                 <Link to="/dashboard" className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Dashboard</Link>
                 {user.role === 'customer' && (
                   <Link to="/find-worker" className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Find Help</Link>
+                )}
+                {user.role === 'admin' && (
+                  <Link to="/admin" className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Admin Panel</Link>
                 )}
                 <div className="flex items-center gap-3 pl-6 border-l border-zinc-200">
                   <div className="text-right">
@@ -109,6 +115,9 @@ const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void })
                 <Link to="/dashboard" className="block px-3 py-2 rounded-md text-base font-medium text-zinc-700 hover:bg-zinc-50">Dashboard</Link>
                 {user.role === 'customer' && (
                   <Link to="/find-worker" className="block px-3 py-2 rounded-md text-base font-medium text-zinc-700 hover:bg-zinc-50">Find Help</Link>
+                )}
+                {user.role === 'admin' && (
+                  <Link to="/admin" className="block px-3 py-2 rounded-md text-base font-medium text-zinc-700 hover:bg-zinc-50">Admin Panel</Link>
                 )}
                 <button onClick={onLogout} className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50">Logout</button>
               </>
@@ -509,6 +518,9 @@ const FindWorker = ({ user }: { user: User }) => {
   const [loading, setLoading] = useState(true);
   const [selectedWorker, setSelectedWorker] = useState<WorkerProfile | null>(null);
   const [jobDescription, setJobDescription] = useState('');
+  const [preferredDate, setPreferredDate] = useState('');
+  const [urgency, setUrgency] = useState<'low' | 'medium' | 'high' | 'emergency'>('medium');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [booking, setBooking] = useState(false);
   const navigate = useNavigate();
 
@@ -541,6 +553,9 @@ const FindWorker = ({ user }: { user: User }) => {
           worker_id: selectedWorker.id,
           service_type: selectedWorker.category,
           description: jobDescription,
+          preferred_datetime: preferredDate,
+          urgency,
+          photos: JSON.stringify(photos),
           latitude: 0, // Mock
           longitude: 0 // Mock
         })
@@ -649,7 +664,14 @@ const FindWorker = ({ user }: { user: User }) => {
                   <div className="p-6 pt-10">
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <h3 className="text-lg font-bold text-zinc-900">{worker.name}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-bold text-zinc-900">{worker.name}</h3>
+                          {worker.is_verified && (
+                            <div className="bg-emerald-100 text-emerald-700 p-0.5 rounded-full" title="Verified Professional">
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                            </div>
+                          )}
+                        </div>
                         <p className="text-sm text-emerald-600 font-semibold">{worker.category}</p>
                       </div>
                       <div className="flex items-center gap-1 bg-zinc-50 px-2 py-1 rounded-lg">
@@ -702,7 +724,15 @@ const FindWorker = ({ user }: { user: User }) => {
                       <UserIcon className="w-8 h-8 text-zinc-400" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold text-zinc-900">Book {selectedWorker.name}</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-2xl font-bold text-zinc-900">Book {selectedWorker.name}</h2>
+                        {selectedWorker.is_verified && (
+                          <div className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider">
+                            <ShieldCheck className="w-3 h-3" />
+                            Verified
+                          </div>
+                        )}
+                      </div>
                       <p className="text-emerald-600 font-semibold">{selectedWorker.category}</p>
                     </div>
                   </div>
@@ -711,16 +741,87 @@ const FindWorker = ({ user }: { user: User }) => {
                   </button>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1">
                   <div>
                     <label className="block text-sm font-bold text-zinc-900 mb-2">Job Description</label>
                     <textarea 
-                      rows={4}
+                      rows={3}
                       value={jobDescription}
                       onChange={e => setJobDescription(e.target.value)}
                       className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
                       placeholder="Describe the issue or task in detail..."
                     />
+                  </div>
+
+                  {selectedWorker.portfolio && JSON.parse(selectedWorker.portfolio).length > 0 && (
+                    <div>
+                      <label className="block text-sm font-bold text-zinc-900 mb-2">Portfolio / Past Work</label>
+                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                        {JSON.parse(selectedWorker.portfolio).map((img: string, i: number) => (
+                          <img 
+                            key={i} 
+                            src={img} 
+                            className="w-32 h-32 rounded-xl object-cover border border-zinc-100 flex-shrink-0" 
+                            referrerPolicy="no-referrer"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-emerald-600" /> Preferred Date & Time
+                      </label>
+                      <input 
+                        type="datetime-local"
+                        value={preferredDate}
+                        onChange={e => setPreferredDate(e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-emerald-600" /> Urgency Level
+                      </label>
+                      <select 
+                        value={urgency}
+                        onChange={e => setUrgency(e.target.value as any)}
+                        className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                      >
+                        <option value="low">Low - No rush</option>
+                        <option value="medium">Medium - Within 24h</option>
+                        <option value="high">High - Same day</option>
+                        <option value="emergency">Emergency - ASAP</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-emerald-600" /> Attach Photos
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {photos.map((p, i) => (
+                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-200">
+                          <img src={p} className="w-full h-full object-cover" />
+                          <button 
+                            onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
+                            className="absolute top-1 right-1 bg-zinc-900/50 text-white p-1 rounded-full hover:bg-zinc-900"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <button 
+                        onClick={() => setPhotos([...photos, `https://picsum.photos/seed/${Math.random()}/400/300`])}
+                        className="aspect-square rounded-xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center text-zinc-400 hover:border-emerald-500 hover:text-emerald-500 transition-all"
+                      >
+                        <Camera className="w-6 h-6 mb-1" />
+                        <span className="text-[10px] font-bold">Add Photo</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="bg-zinc-50 p-4 rounded-2xl space-y-3">
@@ -759,10 +860,34 @@ const Dashboard = ({ user }: { user: User }) => {
   const [jobs, setJobs] = useState<JobRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<number | null>(null);
+  const [portfolio, setPortfolio] = useState<string[]>([]);
+  const [updatingPortfolio, setUpdatingPortfolio] = useState(false);
 
   useEffect(() => {
     fetchJobs();
-  }, []);
+    if (user.role === 'worker' && user.workerProfile?.portfolio) {
+      setPortfolio(JSON.parse(user.workerProfile.portfolio));
+    }
+  }, [user]);
+
+  const updatePortfolio = async (newPortfolio: string[]) => {
+    if (!user.workerProfile) return;
+    setUpdatingPortfolio(true);
+    try {
+      const res = await fetch(`/api/workers/${user.workerProfile.id}/portfolio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portfolio: newPortfolio })
+      });
+      if (res.ok) {
+        setPortfolio(newPortfolio);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUpdatingPortfolio(false);
+    }
+  };
 
   const fetchJobs = async () => {
     setLoading(true);
@@ -879,9 +1004,43 @@ const Dashboard = ({ user }: { user: User }) => {
                       </span>
                     </div>
                     
-                    <p className="text-sm text-zinc-600 mb-6 bg-white p-3 rounded-xl border border-zinc-100">
-                      {job.description}
-                    </p>
+                    <div className="flex flex-col gap-4 mb-6">
+                      <p className="text-sm text-zinc-600 bg-white p-3 rounded-xl border border-zinc-100">
+                        {job.description}
+                      </p>
+                      
+                      {(job.preferred_datetime || job.urgency || job.photos) && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {job.preferred_datetime && (
+                            <div className="flex items-center gap-2 text-xs text-zinc-500 bg-zinc-100/50 p-2 rounded-lg">
+                              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                              <span className="font-bold">Scheduled:</span> {new Date(job.preferred_datetime).toLocaleString()}
+                            </div>
+                          )}
+                          {job.urgency && (
+                            <div className={cn(
+                              "flex items-center gap-2 text-xs p-2 rounded-lg font-bold",
+                              job.urgency === 'emergency' ? "bg-red-50 text-red-600" :
+                              job.urgency === 'high' ? "bg-orange-50 text-orange-600" :
+                              "bg-zinc-100/50 text-zinc-500"
+                            )}>
+                              <Zap className="w-3.5 h-3.5" />
+                              <span className="uppercase tracking-wider">Urgency: {job.urgency}</span>
+                            </div>
+                          )}
+                          {job.photos && JSON.parse(job.photos).length > 0 && (
+                            <div className="md:col-span-2">
+                              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Attached Photos</p>
+                              <div className="flex gap-2 overflow-x-auto pb-2">
+                                {JSON.parse(job.photos).map((p: string, i: number) => (
+                                  <img key={i} src={p} className="w-16 h-16 rounded-lg object-cover border border-zinc-200 flex-shrink-0" referrerPolicy="no-referrer" />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-center gap-4 text-xs text-zinc-400 font-medium">
@@ -997,6 +1156,196 @@ const Dashboard = ({ user }: { user: User }) => {
               </div>
             </div>
           </div>
+
+          {/* Portfolio Management for Workers */}
+          {user.role === 'worker' && (
+            <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-zinc-900">My Portfolio</h3>
+                <button 
+                  onClick={() => updatePortfolio([...portfolio, `https://picsum.photos/seed/${Math.random()}/800/600`])}
+                  disabled={updatingPortfolio}
+                  className="text-emerald-600 p-1 hover:bg-emerald-50 rounded-lg transition-colors"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {portfolio.map((img, i) => (
+                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-100 group">
+                    <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <button 
+                      onClick={() => updatePortfolio(portfolio.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {portfolio.length === 0 && (
+                  <div className="col-span-2 py-8 text-center border-2 border-dashed border-zinc-100 rounded-2xl">
+                    <p className="text-xs text-zinc-400">No portfolio images yet.</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-4 italic">Showcase your best work to attract more customers.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdminDashboard = () => {
+  const [stats, setStats] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAdminData();
+  }, []);
+
+  const fetchAdminData = async () => {
+    setLoading(true);
+    try {
+      const [statsRes, usersRes, jobsRes] = await Promise.all([
+        fetch('/api/admin/stats'),
+        fetch('/api/admin/users'),
+        fetch('/api/admin/jobs')
+      ]);
+      const [statsData, usersData, jobsData] = await Promise.all([
+        statsRes.json(),
+        usersRes.json(),
+        jobsRes.json()
+      ]);
+      setStats(statsData);
+      setUsers(usersData);
+      setJobs(jobsData);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleVerify = async (workerId: number, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`/api/admin/workers/${workerId}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_verified: !currentStatus })
+      });
+      if (res.ok) {
+        fetchAdminData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-black text-zinc-900 tracking-tight">Admin Control Center</h1>
+        <p className="text-zinc-500">Real-time platform monitoring and management.</p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+        {[
+          { label: 'Total Users', value: stats?.users, icon: UserIcon, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Active Workers', value: stats?.workers, icon: Hammer, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Total Jobs', value: stats?.jobs, icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+          { label: 'Total Revenue', value: `KES ${stats?.revenue}`, icon: CreditCard, color: 'text-orange-600', bg: 'bg-orange-50' },
+        ].map((stat, i) => (
+          <div key={i} className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+            <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4", stat.bg)}>
+              <stat.icon className={cn("w-6 h-6", stat.color)} />
+            </div>
+            <p className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-1">{stat.label}</p>
+            <p className="text-2xl font-black text-zinc-900">{stat.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Recent Users */}
+        <div className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+            <h2 className="font-bold text-zinc-900">Recent Registrations</h2>
+            <Link to="#" className="text-xs font-bold text-emerald-600 hover:underline">View All</Link>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {users.slice(0, 5).map((u: any) => (
+              <div key={u.id} className="px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-400">
+                    <UserIcon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-zinc-900">{u.name}</p>
+                    <p className="text-xs text-zinc-500">{u.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={cn(
+                    "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
+                    u.role === 'worker' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+                  )}>
+                    {u.role}
+                  </span>
+                  {u.role === 'worker' && (
+                    <button 
+                      onClick={() => toggleVerify(u.worker_id, !!u.is_verified)}
+                      className={cn(
+                        "p-1.5 rounded-lg transition-colors",
+                        u.is_verified ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-zinc-100 text-zinc-400 hover:bg-zinc-200"
+                      )}
+                      title={u.is_verified ? "Unverify Worker" : "Verify Worker"}
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent Jobs */}
+        <div className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+            <h2 className="font-bold text-zinc-900">Platform Activity</h2>
+            <Link to="#" className="text-xs font-bold text-emerald-600 hover:underline">Live Feed</Link>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {jobs.slice(0, 5).map((j: any) => (
+              <div key={j.id} className="px-6 py-4">
+                <div className="flex justify-between items-start mb-1">
+                  <p className="text-sm font-bold text-zinc-900">{j.service_type}</p>
+                  <span className="text-[10px] font-bold text-zinc-400">{new Date(j.created_at).toLocaleDateString()}</span>
+                </div>
+                <p className="text-xs text-zinc-500">
+                  <span className="font-semibold text-zinc-700">{j.customer_name}</span> → <span className="font-semibold text-zinc-700">{j.worker_name}</span>
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className={cn(
+                    "w-2 h-2 rounded-full",
+                    j.status === 'completed' ? "bg-emerald-500" : "bg-yellow-500"
+                  )} />
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{j.status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -1041,6 +1390,7 @@ export default function App() {
             <Route path="/register" element={!user ? <Register onLogin={handleLogin} /> : <Navigate to="/dashboard" />} />
             <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
             <Route path="/find-worker" element={user?.role === 'customer' ? <FindWorker user={user} /> : <Navigate to="/login" />} />
+            <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" />} />
           </Routes>
         </main>
 
