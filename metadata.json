@@ -1,0 +1,5 @@
+{
+  "name": "HandsOn",
+  "description": "A location-based digital platform connecting customers with verified skilled workers like plumbers, electricians, and technicians in Kenya.",
+  "requestFramePermissions": ["geolocation"]
+}
