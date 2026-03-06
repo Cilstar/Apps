@@ -46,6 +46,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { User, WorkerProfile, JobRequest, SERVICE_CATEGORIES, ServiceCategory, Review } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { io } from 'socket.io-client';
+import { Toaster, toast } from 'sonner';
+
+const socket = io();
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -159,46 +163,56 @@ const ReviewModal = ({ isOpen, onClose, job, onSubmit }: {
 
 const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
-    <nav className="bg-white border-b border-zinc-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+    <nav className={cn(
+      "sticky top-0 z-50 transition-all duration-300",
+      scrolled ? "bg-white/80 backdrop-blur-xl border-b border-zinc-200 py-2 shadow-sm" : "bg-transparent py-4"
+    )}>
+      <div className="max-w-7xl mx-auto px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="bg-emerald-600 p-1.5 rounded-lg">
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="bg-emerald-600 p-2 rounded-2xl group-hover:rotate-12 transition-transform shadow-lg shadow-emerald-200">
                 <Hammer className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xl font-bold tracking-tight text-zinc-900">HandsOn</span>
+              <span className="text-2xl font-black tracking-tight text-zinc-900">HandsOn</span>
             </Link>
           </div>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-8">
             {user ? (
               <>
-                <Link to="/dashboard" className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Dashboard</Link>
+                <Link to="/dashboard" className="text-sm font-bold text-zinc-600 hover:text-emerald-600 transition-colors">Dashboard</Link>
                 {user.role === 'customer' && (
-                  <Link to="/find-worker" className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Find Help</Link>
+                  <Link to="/find-worker" className="text-sm font-bold text-zinc-600 hover:text-emerald-600 transition-colors">Find Help</Link>
                 )}
                 {user.role === 'admin' && (
-                  <Link to="/admin" className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Admin Panel</Link>
+                  <Link to="/admin" className="text-sm font-bold text-zinc-600 hover:text-emerald-600 transition-colors">Admin Panel</Link>
                 )}
-                <div className="flex items-center gap-3 pl-6 border-l border-zinc-200">
-                  <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center overflow-hidden">
+                <div className="flex items-center gap-4 pl-8 border-l border-zinc-200">
+                  <div className="text-right">
+                    <p className="text-sm font-black text-zinc-900 leading-tight">{user.name}</p>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{user.role}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-2xl bg-zinc-100 flex items-center justify-center overflow-hidden border border-zinc-200 shadow-sm">
                     {user.profile_photo ? (
                       <img src={user.profile_photo} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
-                      <UserIcon className="w-4 h-4 text-zinc-400" />
+                      <UserIcon className="w-5 h-5 text-zinc-400" />
                     )}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-zinc-900">{user.name}</p>
-                    <p className="text-xs text-zinc-500 capitalize">{user.role}</p>
                   </div>
                   <button 
                     onClick={onLogout}
-                    className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
+                    className="p-2.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                   >
                     <LogOut className="w-5 h-5" />
                   </button>
@@ -206,8 +220,8 @@ const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void })
               </>
             ) : (
               <>
-                <Link to="/login" className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Login</Link>
-                <Link to="/register" className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors">
+                <Link to="/login" className="text-sm font-bold text-zinc-600 hover:text-emerald-600 transition-colors">Login</Link>
+                <Link to="/register" className="bg-zinc-900 text-white px-6 py-3 rounded-2xl text-sm font-bold hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200 active:scale-[0.98]">
                   Join as Worker
                 </Link>
               </>
@@ -216,7 +230,10 @@ const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void })
 
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center">
-            <button onClick={() => setIsOpen(!isOpen)} className="text-zinc-500 p-2">
+            <button 
+              onClick={() => setIsOpen(!isOpen)} 
+              className="text-zinc-500 p-2.5 bg-zinc-100 rounded-xl hover:bg-zinc-200 transition-colors"
+            >
               {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
@@ -227,28 +244,32 @@ const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void })
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="md:hidden bg-white border-b border-zinc-200 px-4 pt-2 pb-6 space-y-2"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="md:hidden bg-white border-b border-zinc-200 overflow-hidden"
           >
-            {user ? (
-              <>
-                <Link to="/dashboard" className="block px-3 py-2 rounded-md text-base font-medium text-zinc-700 hover:bg-zinc-50">Dashboard</Link>
-                {user.role === 'customer' && (
-                  <Link to="/find-worker" className="block px-3 py-2 rounded-md text-base font-medium text-zinc-700 hover:bg-zinc-50">Find Help</Link>
-                )}
-                {user.role === 'admin' && (
-                  <Link to="/admin" className="block px-3 py-2 rounded-md text-base font-medium text-zinc-700 hover:bg-zinc-50">Admin Panel</Link>
-                )}
-                <button onClick={onLogout} className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50">Logout</button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="block px-3 py-2 rounded-md text-base font-medium text-zinc-700 hover:bg-zinc-50">Login</Link>
-                <Link to="/register" className="block px-3 py-2 rounded-md text-base font-medium text-emerald-600 hover:bg-emerald-50">Register</Link>
-              </>
-            )}
+            <div className="px-6 py-8 space-y-4">
+              {user ? (
+                <>
+                  <Link to="/dashboard" onClick={() => setIsOpen(false)} className="block px-4 py-3 rounded-2xl text-base font-bold text-zinc-700 hover:bg-zinc-50">Dashboard</Link>
+                  {user.role === 'customer' && (
+                    <Link to="/find-worker" onClick={() => setIsOpen(false)} className="block px-4 py-3 rounded-2xl text-base font-bold text-zinc-700 hover:bg-zinc-50">Find Help</Link>
+                  )}
+                  {user.role === 'admin' && (
+                    <Link to="/admin" onClick={() => setIsOpen(false)} className="block px-4 py-3 rounded-2xl text-base font-bold text-zinc-700 hover:bg-zinc-50">Admin Panel</Link>
+                  )}
+                  <div className="pt-4 border-t border-zinc-100">
+                    <button onClick={onLogout} className="w-full text-left block px-4 py-3 rounded-2xl text-base font-bold text-red-600 hover:bg-red-50">Logout</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" onClick={() => setIsOpen(false)} className="block px-4 py-3 rounded-2xl text-base font-bold text-zinc-700 hover:bg-zinc-50">Login</Link>
+                  <Link to="/register" onClick={() => setIsOpen(false)} className="block px-4 py-3 rounded-2xl text-base font-bold bg-zinc-900 text-white text-center">Join as Worker</Link>
+                </>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -258,129 +279,147 @@ const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void })
 
 // --- Pages ---
 
-const Home = () => (
-  <div className="relative overflow-hidden">
-    {/* Hero Section */}
-    <div className="relative bg-zinc-900 py-24 sm:py-32 overflow-hidden">
-      <div className="absolute inset-0 opacity-40">
-        <img 
-          src="https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&q=80&w=2000" 
-          alt="Background" 
-          className="w-full h-full object-cover"
-          referrerPolicy="no-referrer"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-zinc-900/60 via-zinc-900/80 to-zinc-900" />
-      </div>
-      
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <span className="inline-flex items-center px-4 py-1.5 rounded-full text-sm font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mb-8 backdrop-blur-sm">
-            <MapPin className="w-4 h-4 mr-2" /> Serving Roysambu & Nairobi
-          </span>
-          <h1 className="text-5xl md:text-7xl font-black text-white tracking-tight mb-8 leading-[1.1]">
-            Your Home, <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">Perfectly Maintained.</span>
-          </h1>
-          <p className="text-xl text-zinc-300 max-w-2xl mx-auto mb-12 leading-relaxed">
-            Instantly connect with the best local experts. From leaky pipes to complex wiring, 
-            we've got the right hands for every job.
-          </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-5">
-            <Link to="/find-worker" className="bg-emerald-500 text-zinc-900 px-10 py-5 rounded-2xl text-lg font-black hover:bg-emerald-400 transition-all shadow-2xl shadow-emerald-500/20 active:scale-95">
-              Get Started Now
-            </Link>
-            <Link to="/register" className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-10 py-5 rounded-2xl text-lg font-black hover:bg-white/20 transition-all active:scale-95">
-              Become a Pro
-            </Link>
+const Home = () => {
+  return (
+    <div className="relative overflow-hidden">
+      {/* Hero Section */}
+      <div className="relative pt-20 pb-32 sm:pt-32 sm:pb-40">
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute left-[50%] top-0 h-[64rem] w-[128rem] -translate-x-[50%] stroke-zinc-200 [mask-image:radial-gradient(64rem_64rem_at_top,white,transparent)]">
+            <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
+              <defs>
+                <pattern id="hero-pattern" width="200" height="200" x="50%" y="-1" patternUnits="userSpaceOnUse">
+                  <path d="M100 200V.5M.5 .5H200" fill="none" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" strokeWidth="0" fill="url(#hero-pattern)" />
+            </svg>
           </div>
-        </motion.div>
-      </div>
-    </div>
-
-    {/* Categories Grid */}
-    <div className="py-24 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
-          <div>
-            <h2 className="text-4xl font-black text-zinc-900 tracking-tight">Popular Services</h2>
-            <p className="text-zinc-500 mt-2 text-lg">Top-rated professionals ready to help.</p>
-          </div>
-          <Link to="/find-worker" className="text-emerald-600 font-bold flex items-center gap-2 hover:gap-3 transition-all">
-            View all services <ChevronRight className="w-5 h-5" />
-          </Link>
         </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {SERVICE_CATEGORIES.map((cat) => (
-            <Link 
-              key={cat} 
-              to={`/find-worker?category=${cat}`}
-              className="group relative h-48 rounded-3xl overflow-hidden border border-zinc-100 shadow-sm hover:shadow-xl transition-all hover:-translate-y-1"
+
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
             >
-              <img 
-                src={CATEGORY_IMAGES[cat]} 
-                alt={cat} 
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/80 via-zinc-900/20 to-transparent" />
-              <div className="absolute bottom-4 left-4 right-4">
-                <p className="text-white font-bold text-lg">{cat}</p>
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-sm font-bold border border-emerald-100 mb-8">
+                <Sparkles className="w-4 h-4" />
+                Kenya's #1 Trusted Service Platform
+              </span>
+              <h1 className="text-5xl sm:text-7xl font-black text-zinc-900 tracking-tight mb-8">
+                Expert Help, <br />
+                <span className="text-emerald-600">Right at Your Door.</span>
+              </h1>
+              <p className="max-w-2xl mx-auto text-lg sm:text-xl text-zinc-500 leading-relaxed mb-12">
+                Connect with verified local professionals for plumbing, electrical, cleaning, and more. 
+                Fast, reliable, and secure payments via M-Pesa.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Link to="/find-worker" className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-[0.98]">
+                  Find a Professional
+                </Link>
+                <Link to="/register" className="w-full sm:w-auto bg-white text-zinc-900 px-8 py-4 rounded-2xl font-bold text-lg border border-zinc-200 hover:bg-zinc-50 transition-all active:scale-[0.98]">
+                  Join as a Worker
+                </Link>
               </div>
-            </Link>
-          ))}
+            </motion.div>
+          </div>
         </div>
       </div>
-    </div>
 
-    {/* Features */}
-    <div className="bg-emerald-600 py-24 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -mr-48 -mt-48" />
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-400/20 rounded-full blur-3xl -ml-48 -mb-48" />
-      
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-black text-white tracking-tight">Why HandsOn?</h2>
-          <p className="text-emerald-100 mt-4 text-lg">We're building the future of local services.</p>
-        </div>
-        <div className="grid md:grid-cols-3 gap-8">
-          {[
-            { 
-              title: 'Verified Pros', 
-              desc: 'Rigorous background checks and skill assessments for your peace of mind.',
-              icon: ShieldCheck,
-              bg: 'bg-white/10'
-            },
-            { 
-              title: 'Instant Booking', 
-              desc: 'No more endless calls. Book your service in seconds with upfront pricing.',
-              icon: Clock,
-              bg: 'bg-white/10'
-            },
-            { 
-              title: 'Secure Payments', 
-              desc: 'Integrated M-Pesa payments ensure your money is safe until the job is done.',
-              icon: CreditCard,
-              bg: 'bg-white/10'
-            }
-          ].map((feature, i) => (
-            <div key={i} className={cn("p-10 rounded-[2.5rem] border border-white/20 backdrop-blur-sm", feature.bg)}>
-              <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center mb-8 shadow-xl">
-                <feature.icon className="w-8 h-8 text-emerald-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-4">{feature.title}</h3>
-              <p className="text-emerald-50/80 text-lg leading-relaxed">{feature.desc}</p>
+      {/* Categories Grid */}
+      <div className="py-24 bg-zinc-50/50">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="flex items-end justify-between mb-12">
+            <div>
+              <h2 className="text-3xl font-bold text-zinc-900 mb-2">Popular Services</h2>
+              <p className="text-zinc-500">Explore our wide range of professional services.</p>
             </div>
-          ))}
+            <Link to="/find-worker" className="text-emerald-600 font-bold hover:underline flex items-center gap-1">
+              View all <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {SERVICE_CATEGORIES.map((cat) => (
+              <Link 
+                key={cat} 
+                to={`/find-worker?category=${cat}`}
+                className="group bg-white p-6 rounded-3xl border border-zinc-200 hover:border-emerald-500 hover:shadow-xl transition-all text-center"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  {cat === 'Plumbing' && <Droplets className="w-6 h-6" />}
+                  {cat === 'Electrical' && <Zap className="w-6 h-6" />}
+                  {cat === 'Carpentry' && <Hammer className="w-6 h-6" />}
+                  {cat === 'Cleaning' && <Sparkles className="w-6 h-6" />}
+                  {cat === 'Painting' && <Palette className="w-6 h-6" />}
+                  {cat === 'Technician' && <Cpu className="w-6 h-6" />}
+                </div>
+                <span className="font-bold text-zinc-900">{cat}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Trust Section */}
+      <div className="py-24">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+            <div>
+              <h2 className="text-4xl font-black text-zinc-900 tracking-tight mb-8">
+                Why thousands trust <br />
+                <span className="text-emerald-600">HandsOn Kenya</span>
+              </h2>
+              <div className="space-y-8">
+                {[
+                  { title: 'Verified Professionals', desc: 'Every worker undergoes a rigorous background check and document verification.', icon: ShieldCheck },
+                  { title: 'Secure M-Pesa Payments', desc: 'Pay only when the job is done. Your money is safe with our secure escrow system.', icon: CreditCard },
+                  { title: 'Real-time Tracking', desc: 'Track your service request status in real-time from booking to completion.', icon: Clock },
+                ].map((item, i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <item.icon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-zinc-900 mb-1">{item.title}</h3>
+                      <p className="text-zinc-500 leading-relaxed">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="relative">
+              <div className="aspect-square rounded-[3rem] bg-zinc-100 overflow-hidden">
+                <img 
+                  src="https://images.unsplash.com/photo-1581578731548-c64695cc6958?auto=format&fit=crop&q=80&w=1000" 
+                  alt="Service Professional" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <div className="absolute -bottom-8 -left-8 bg-white p-8 rounded-3xl shadow-2xl border border-zinc-100 max-w-xs">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex -space-x-2">
+                    {[1,2,3].map(i => (
+                      <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-zinc-200 overflow-hidden">
+                        <img src={`https://picsum.photos/seed/${i}/100`} alt="User" referrerPolicy="no-referrer" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-sm font-bold text-zinc-900">10k+ Happy Users</div>
+                </div>
+                <p className="text-sm text-zinc-500 italic">"The best service I've ever used in Nairobi. Fast and reliable!"</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Login = ({ onLogin }: { onLogin: (user: User) => void }) => {
   const [email, setEmail] = useState('');
@@ -665,7 +704,14 @@ const FindWorker = ({ user }: { user: User }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const navigate = useNavigate();
+
+  const [recentJobs, setRecentJobs] = useState([
+    { id: 1, service: 'Plumbing', area: 'Roysambu', time: '2 mins ago' },
+    { id: 2, service: 'Electrical', area: 'Westlands', time: '5 mins ago' },
+    { id: 3, service: 'Cleaning', area: 'Kasarani', time: '12 mins ago' },
+  ]);
 
   useEffect(() => {
     fetchWorkers();
@@ -800,15 +846,54 @@ const FindWorker = ({ user }: { user: User }) => {
               </button>
             ))}
           </div>
+
+          {/* Live Feed */}
+          <div className="mt-12 p-6 bg-zinc-900 rounded-[2rem] text-white">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-400">Live Activity</h3>
+            </div>
+            <div className="space-y-4">
+              {recentJobs.map(job => (
+                <div key={job.id} className="border-l-2 border-white/10 pl-4 py-1">
+                  <p className="text-xs font-bold">{job.service} requested</p>
+                  <p className="text-[10px] text-zinc-400">{job.area} • {job.time}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Main Content */}
         <div className="flex-1">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 gap-4">
-            <h1 className="text-2xl font-bold text-zinc-900">
-              {category || 'All'} Workers Nearby
-            </h1>
+            <div>
+              <h1 className="text-3xl font-black text-zinc-900 tracking-tight">
+                {category || 'All'} Professionals
+              </h1>
+              <p className="text-zinc-500">Find the best hands for your task in {locationQuery || 'Nairobi'}.</p>
+            </div>
             <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex bg-zinc-100 p-1 rounded-2xl mr-2">
+                <button 
+                  onClick={() => setViewMode('grid')}
+                  className={cn(
+                    "p-2 rounded-xl transition-all",
+                    viewMode === 'grid' ? "bg-white text-emerald-600 shadow-sm" : "text-zinc-400 hover:text-zinc-600"
+                  )}
+                >
+                  <LayoutGrid className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => setViewMode('map')}
+                  className={cn(
+                    "p-2 rounded-xl transition-all",
+                    viewMode === 'map' ? "bg-white text-emerald-600 shadow-sm" : "text-zinc-400 hover:text-zinc-600"
+                  )}
+                >
+                  <MapPin className="w-5 h-5" />
+                </button>
+              </div>
               <div className="relative flex-1 sm:w-64">
                 <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input 
@@ -816,7 +901,7 @@ const FindWorker = ({ user }: { user: User }) => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search name or service..."
-                  className="w-full pl-10 pr-4 py-2 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm bg-white"
                 />
               </div>
               <div className="relative flex-1 sm:w-64">
@@ -826,13 +911,50 @@ const FindWorker = ({ user }: { user: User }) => {
                   value={locationQuery}
                   onChange={(e) => setLocationQuery(e.target.value)}
                   placeholder="Enter your area..."
-                  className="w-full pl-10 pr-4 py-2 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm bg-white"
                 />
               </div>
             </div>
           </div>
 
-          {loading ? (
+          {viewMode === 'map' ? (
+            <div className="bg-zinc-100 rounded-[2.5rem] h-[600px] relative overflow-hidden border border-zinc-200 shadow-inner">
+              <div className="absolute inset-0 opacity-20">
+                <svg className="w-full h-full" viewBox="0 0 800 600">
+                  <path d="M0 0h800v600H0z" fill="#fff" />
+                  <path d="M100 100l200 50 150-50 200 100-50 200-200 50-200-50z" fill="none" stroke="#e2e8f0" strokeWidth="2" />
+                  <circle cx="400" cy="300" r="200" fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 4" />
+                </svg>
+              </div>
+              {filteredWorkers.map((w, i) => (
+                <motion.div
+                  key={w.id}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="absolute cursor-pointer group"
+                  style={{ 
+                    left: `${20 + (i * 15) % 60}%`, 
+                    top: `${20 + (i * 20) % 60}%` 
+                  }}
+                  onClick={() => setSelectedWorker(w)}
+                >
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-2xl bg-white shadow-xl border-2 border-emerald-500 flex items-center justify-center overflow-hidden group-hover:scale-110 transition-transform">
+                      <img src={w.profile_photo || `https://picsum.photos/seed/${w.id}/100`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-zinc-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                      {w.name} • KES {w.hourly_rate}/hr
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+              <div className="absolute bottom-8 left-8 bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-white/20 shadow-xl">
+                <p className="text-xs font-bold text-zinc-900 mb-1">Service Area: Nairobi</p>
+                <p className="text-[10px] text-zinc-500">{filteredWorkers.length} professionals available nearby</p>
+              </div>
+            </div>
+          ) : loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1,2,3,4,5,6].map(i => (
                 <div key={i} className="h-64 bg-zinc-100 rounded-2xl animate-pulse" />
@@ -1429,69 +1551,117 @@ const Dashboard = ({ user }: { user: User }) => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900">Welcome, {user.name}</h1>
-          <p className="text-zinc-500">Manage your {user.role === 'customer' ? 'service requests' : 'jobs'} and payments.</p>
+          <h1 className="text-4xl font-black text-zinc-900 tracking-tight mb-2">
+            Welcome back, <span className="text-emerald-600">{user.name.split(' ')[0]}</span>
+          </h1>
+          <p className="text-zinc-500 flex items-center gap-2">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            {user.role === 'customer' ? 'Your home is in good hands.' : 'You have 3 new job opportunities today.'}
+          </p>
         </div>
-        {user.role === 'customer' && (
-          <Link to="/find-worker" className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100">
-            Book New Service
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          {user.role === 'customer' && (
+            <Link to="/find-worker" className="bg-zinc-900 text-white px-8 py-4 rounded-2xl font-bold hover:bg-zinc-800 transition-all shadow-xl shadow-zinc-200 active:scale-[0.98] flex items-center gap-2">
+              <Plus className="w-5 h-5" />
+              Book Service
+            </Link>
+          )}
+          <button className="p-4 bg-white border border-zinc-200 rounded-2xl text-zinc-600 hover:bg-zinc-50 transition-all shadow-sm">
+            <Settings className="w-6 h-6" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Jobs List */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
-              <h2 className="font-bold text-zinc-900">Recent Activity</h2>
-              <Clock className="w-5 h-5 text-zinc-400" />
+        <div className="lg:col-span-2 space-y-8">
+          {/* Stats Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Total Spent</p>
+              <p className="text-2xl font-black text-zinc-900">KES 12,450</p>
+              <div className="mt-2 flex items-center gap-1 text-emerald-600 text-xs font-bold">
+                <ChevronRight className="w-3 h-3 rotate-[-90deg]" /> +12% from last month
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Active Jobs</p>
+              <p className="text-2xl font-black text-zinc-900">{jobs.filter(j => ['accepted', 'in_progress'].includes(j.status)).length}</p>
+              <div className="mt-2 flex items-center gap-1 text-zinc-400 text-xs font-bold">
+                Currently in progress
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">Saved Pros</p>
+              <p className="text-2xl font-black text-zinc-900">8</p>
+              <div className="mt-2 flex items-center gap-1 text-emerald-600 text-xs font-bold">
+                View favorites
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[2.5rem] border border-zinc-200 overflow-hidden shadow-sm">
+            <div className="px-8 py-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+              <h2 className="font-black text-zinc-900 tracking-tight">Recent Activity</h2>
+              <div className="flex bg-zinc-200/50 p-1 rounded-xl">
+                <button className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-zinc-900 shadow-sm">All</button>
+                <button className="px-3 py-1.5 rounded-lg text-xs font-bold text-zinc-500 hover:text-zinc-900">Active</button>
+              </div>
             </div>
             
             {loading ? (
-              <div className="p-12 text-center">
-                <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-zinc-500">Loading your jobs...</p>
+              <div className="p-20 text-center">
+                <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-6" />
+                <p className="text-zinc-500 font-medium">Syncing your activity...</p>
               </div>
             ) : jobs.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-zinc-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle className="w-8 h-8 text-zinc-300" />
+              <div className="p-20 text-center">
+                <div className="w-20 h-20 bg-zinc-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <AlertCircle className="w-10 h-10 text-zinc-200" />
                 </div>
-                <p className="text-zinc-500 font-medium">No activity yet.</p>
+                <h3 className="text-xl font-bold text-zinc-900 mb-2">No activity yet</h3>
+                <p className="text-zinc-500 max-w-xs mx-auto mb-8">Start your first project by finding a professional near you.</p>
+                <Link to="/find-worker" className="inline-flex items-center gap-2 text-emerald-600 font-bold hover:underline">
+                  Browse Services <ChevronRight className="w-4 h-4" />
+                </Link>
               </div>
             ) : (
               <div className="divide-y divide-zinc-100">
                 {jobs.map(job => (
-                  <div key={job.id} className="p-6 hover:bg-zinc-50 transition-colors">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 overflow-hidden">
+                  <div key={job.id} className="p-8 hover:bg-zinc-50/50 transition-all group">
+                    <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
+                      <div className="flex gap-6">
+                        <div className="w-16 h-16 rounded-2xl bg-zinc-100 flex items-center justify-center text-emerald-600 overflow-hidden border border-zinc-200 shadow-sm group-hover:scale-105 transition-transform">
                           {user.role === 'customer' && job.profile_photo ? (
                             <img src={job.profile_photo} alt={job.worker_name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           ) : (
-                            <Hammer className="w-6 h-6" />
+                            <Hammer className="w-8 h-8" />
                           )}
                         </div>
                         <div>
-                          <h3 className="font-bold text-zinc-900">{job.service_type}</h3>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm text-zinc-500">
+                          <div className="flex items-center gap-3 mb-1">
+                            <h3 className="text-lg font-black text-zinc-900 tracking-tight">{job.service_type}</h3>
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                              getStatusColor(job.status).replace('bg-', 'bg-opacity-10 border-').replace('text-', 'text-')
+                            )}>
+                              {job.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-zinc-500 mb-3">
+                            <p className="font-medium">
                               {user.role === 'customer' ? `Worker: ${job.worker_name}` : `Customer: ${job.customer_name}`}
                             </p>
-                            {user.role === 'customer' && (
-                              <div className="flex items-center gap-1">
-                                {job.is_online ? (
-                                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" title="Worker is Online" />
-                                ) : (
-                                  <div className="w-2 h-2 bg-zinc-300 rounded-full" title="Worker is Offline" />
-                                )}
-                              </div>
-                            )}
+                            <span className="w-1 h-1 bg-zinc-300 rounded-full" />
+                            <p className="flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5" />
+                              {new Date(job.created_at).toLocaleDateString()}
+                            </p>
                           </div>
+                          <p className="text-sm text-zinc-500 line-clamp-1 max-w-md italic">"{job.description}"</p>
                         </div>
                       </div>
                       <span className={cn("px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider", getStatusColor(job.status))}>
@@ -2305,14 +2475,39 @@ export default function App() {
   useEffect(() => {
     const savedUser = localStorage.getItem('handson_user');
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      socket.emit('join', parsedUser.role === 'worker' ? `worker_${parsedUser.workerProfile?.id}` : `user_${parsedUser.id}`);
     }
     setLoading(false);
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+
+    socket.on('job_update', (data) => {
+      toast.success(`Job status updated to ${data.status.replace('_', ' ')}`);
+    });
+
+    socket.on('new_job', (data) => {
+      if (user.role === 'worker') {
+        toast.info(`New job request: ${data.service_type}`, {
+          description: 'Check your dashboard to accept.',
+          duration: 10000,
+        });
+      }
+    });
+
+    return () => {
+      socket.off('job_update');
+      socket.off('new_job');
+    };
+  }, [user]);
+
   const handleLogin = (userData: User) => {
     setUser(userData);
     localStorage.setItem('handson_user', JSON.stringify(userData));
+    socket.emit('join', userData.role === 'worker' ? `worker_${userData.workerProfile?.id}` : `user_${userData.id}`);
   };
 
   const handleLogout = () => {
@@ -2324,6 +2519,7 @@ export default function App() {
 
   return (
     <Router>
+      <Toaster position="top-right" richColors closeButton />
       <div className="min-h-screen bg-white font-sans text-zinc-900 selection:bg-emerald-100 selection:text-emerald-900">
         <Navbar user={user} onLogout={handleLogout} />
         

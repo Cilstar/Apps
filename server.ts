@@ -3,6 +3,8 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import Database from "better-sqlite3";
 import { fileURLToPath } from "url";
+import { createServer } from "http";
+import { Server } from "socket.io";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -228,9 +230,24 @@ seedData();
 
 async function startServer() {
   const app = express();
+  const httpServer = createServer(app);
+  const io = new Server(httpServer, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
+  });
+
   const PORT = 3000;
 
   app.use(express.json());
+
+  // WebSocket logic
+  io.on("connection", (socket) => {
+    socket.on("join", (room) => {
+      socket.join(room);
+    });
+  });
 
   // API Routes
   app.post("/api/auth/register", (req, res) => {
@@ -298,7 +315,13 @@ async function startServer() {
         (customer_id, worker_id, service_type, description, latitude, longitude, preferred_datetime, urgency, photos) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(customer_id, worker_id, service_type, description, latitude, longitude, preferred_datetime, urgency, photos);
-      res.json({ success: true, jobId: result.lastInsertRowid });
+      
+      const jobId = result.lastInsertRowid;
+      
+      // Notify worker via WebSocket
+      io.to(`worker_${worker_id}`).emit("new_job", { jobId, service_type });
+      
+      res.json({ success: true, jobId });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -338,6 +361,14 @@ async function startServer() {
   app.patch("/api/jobs/:id/status", (req, res) => {
     const { status } = req.body;
     db.prepare("UPDATE job_requests SET status = ? WHERE id = ?").run(status, req.params.id);
+    
+    // Notify customer and worker via WebSocket
+    const job = db.prepare("SELECT * FROM job_requests WHERE id = ?").get(req.params.id) as any;
+    if (job) {
+      io.to(`user_${job.customer_id}`).emit("job_update", { jobId: job.id, status });
+      io.to(`worker_${job.worker_id}`).emit("job_update", { jobId: job.id, status });
+    }
+    
     res.json({ success: true });
   });
 
@@ -537,6 +568,11 @@ async function startServer() {
     res.json(reviews);
   });
 
+  // Placeholder image route to prevent 404s for missing profile photos
+  app.get("/api/images/:id", (req, res) => {
+    res.redirect(`https://picsum.photos/seed/${req.params.id}/200`);
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -551,7 +587,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  // SPA Fallback for development (if Vite middleware doesn't catch it)
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "index.html"));
+  });
+
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
