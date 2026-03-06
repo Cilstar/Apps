@@ -20,10 +20,30 @@ import {
   ShieldCheck,
   Camera,
   Calendar,
-  Zap
+  Zap,
+  LayoutGrid,
+  BarChart3,
+  Ban,
+  AlertTriangle,
+  Plus,
+  Sparkles,
+  Palette,
+  Cpu,
+  Droplets
 } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area 
+} from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, WorkerProfile, JobRequest, SERVICE_CATEGORIES, ServiceCategory } from './types';
+import { User, WorkerProfile, JobRequest, SERVICE_CATEGORIES, ServiceCategory, Review } from './types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -41,6 +61,101 @@ const CATEGORY_IMAGES: Record<ServiceCategory, string> = {
 };
 
 // --- Components ---
+
+const ReviewModal = ({ isOpen, onClose, job, onSubmit }: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  job: JobRequest,
+  onSubmit: (rating: number, comment: string) => void 
+}) => {
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    await onSubmit(rating, comment);
+    setIsSubmitting(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm"
+      />
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+      >
+        <div className="p-8">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-2xl font-bold text-zinc-900">Rate your experience</h3>
+            <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
+              <X className="w-6 h-6 text-zinc-400" />
+            </button>
+          </div>
+
+          <p className="text-zinc-500 mb-8">How was the service provided by <span className="font-bold text-zinc-900">{job.worker_name}</span>?</p>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRating(star)}
+                  className="p-1 transition-transform hover:scale-110"
+                >
+                  <Star 
+                    className={cn(
+                      "w-10 h-10 transition-colors",
+                      star <= rating ? "fill-yellow-400 text-yellow-400" : "text-zinc-200"
+                    )} 
+                  />
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-2">Your feedback (optional)</label>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all h-32 resize-none"
+                placeholder="Share your experience..."
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-4 rounded-2xl font-bold text-zinc-500 hover:bg-zinc-50 transition-all"
+              >
+                Skip
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-[2] bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Review'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -70,6 +185,13 @@ const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void })
                   <Link to="/admin" className="text-sm font-medium text-zinc-600 hover:text-emerald-600 transition-colors">Admin Panel</Link>
                 )}
                 <div className="flex items-center gap-3 pl-6 border-l border-zinc-200">
+                  <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center overflow-hidden">
+                    {user.profile_photo ? (
+                      <img src={user.profile_photo} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <UserIcon className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold text-zinc-900">{user.name}</p>
                     <p className="text-xs text-zinc-500 capitalize">{user.role}</p>
@@ -277,7 +399,11 @@ const Login = ({ onLogin }: { onLogin: (user: User) => void }) => {
       const data = await res.json();
       if (data.success) {
         onLogin(data.user);
-        navigate('/dashboard');
+        if (data.user.role === 'admin') {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         setError(data.error);
       }
@@ -522,11 +648,21 @@ const FindWorker = ({ user }: { user: User }) => {
   const [urgency, setUrgency] = useState<'low' | 'medium' | 'high' | 'emergency'>('medium');
   const [photos, setPhotos] = useState<string[]>([]);
   const [booking, setBooking] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchWorkers();
   }, [category]);
+
+  useEffect(() => {
+    if (selectedWorker) {
+      fetchReviews(selectedWorker.id);
+    } else {
+      setReviews([]);
+    }
+  }, [selectedWorker]);
 
   const fetchWorkers = async () => {
     setLoading(true);
@@ -538,6 +674,19 @@ const FindWorker = ({ user }: { user: User }) => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchReviews = async (workerId: number) => {
+    setLoadingReviews(true);
+    try {
+      const res = await fetch(`/api/workers/${workerId}/reviews`);
+      const data = await res.json();
+      setReviews(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingReviews(false);
     }
   };
 
@@ -666,17 +815,36 @@ const FindWorker = ({ user }: { user: User }) => {
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="text-lg font-bold text-zinc-900">{worker.name}</h3>
-                          {worker.is_verified && (
-                            <div className="bg-emerald-100 text-emerald-700 p-0.5 rounded-full" title="Verified Professional">
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {worker.is_online ? (
+                              <div className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-emerald-100">
+                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                Online
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 bg-zinc-50 text-zinc-400 px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-zinc-100">
+                                <span className="w-1.5 h-1.5 bg-zinc-300 rounded-full" />
+                                Offline
+                              </div>
+                            )}
+                            {worker.is_verified && (
+                              <div className="bg-emerald-100 text-emerald-700 p-0.5 rounded-full" title="Verified Professional">
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <p className="text-sm text-emerald-600 font-semibold">{worker.category}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Available for Hire</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-1 bg-zinc-50 px-2 py-1 rounded-lg">
                         <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                        <span className="text-sm font-bold text-zinc-700">{worker.avg_rating?.toFixed(1) || 'New'}</span>
+                        <span className="text-sm font-bold text-zinc-700">
+                          {worker.avg_rating ? Number(worker.avg_rating).toFixed(1) : 'New'}
+                        </span>
                       </div>
                     </div>
                     <p className="text-sm text-zinc-500 line-clamp-2 mb-4">{worker.bio}</p>
@@ -768,6 +936,33 @@ const FindWorker = ({ user }: { user: User }) => {
                       </div>
                     </div>
                   )}
+
+                  <div>
+                    <label className="block text-sm font-bold text-zinc-900 mb-2">Customer Reviews</label>
+                    {loadingReviews ? (
+                      <div className="py-4 text-center">
+                        <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                      </div>
+                    ) : reviews.length === 0 ? (
+                      <p className="text-xs text-zinc-400 italic">No reviews yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {reviews.map((r) => (
+                          <div key={r.id} className="p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs font-bold text-zinc-900">{r.customer_name}</span>
+                              <div className="flex items-center gap-0.5">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star key={i} className={cn("w-3 h-3", i < r.rating ? "fill-yellow-400 text-yellow-400" : "text-zinc-200")} />
+                                ))}
+                              </div>
+                            </div>
+                            <p className="text-xs text-zinc-600 leading-relaxed">{r.comment}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -861,13 +1056,33 @@ const Dashboard = ({ user }: { user: User }) => {
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<number | null>(null);
   const [portfolio, setPortfolio] = useState<string[]>([]);
+  const [documents, setDocuments] = useState<string[]>([]);
   const [updatingPortfolio, setUpdatingPortfolio] = useState(false);
+  const [updatingDocuments, setUpdatingDocuments] = useState(false);
+  const [prevJobs, setPrevJobs] = useState<JobRequest[]>([]);
+  const [reviewingJob, setReviewingJob] = useState<JobRequest | null>(null);
+
+  useEffect(() => {
+    if (user.role === 'customer' && jobs.length > 0 && prevJobs.length > 0) {
+      const newlyCompleted = jobs.find(job => {
+        const prevJob = prevJobs.find(pj => pj.id === job.id);
+        return job.status === 'completed' && !job.is_reviewed && prevJob && prevJob.status !== 'completed';
+      });
+      if (newlyCompleted && !reviewingJob) {
+        setReviewingJob(newlyCompleted);
+      }
+    }
+    setPrevJobs(jobs);
+  }, [jobs, user.role]);
 
   useEffect(() => {
     fetchJobs();
-    if (user.role === 'worker' && user.workerProfile?.portfolio) {
-      setPortfolio(JSON.parse(user.workerProfile.portfolio));
+    const interval = setInterval(fetchJobs, 10000); // Poll every 10s
+    if (user.role === 'worker' && user.workerProfile) {
+      if (user.workerProfile.portfolio) setPortfolio(JSON.parse(user.workerProfile.portfolio));
+      if (user.workerProfile.documents) setDocuments(JSON.parse(user.workerProfile.documents));
     }
+    return () => clearInterval(interval);
   }, [user]);
 
   const updatePortfolio = async (newPortfolio: string[]) => {
@@ -879,14 +1094,21 @@ const Dashboard = ({ user }: { user: User }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ portfolio: newPortfolio })
       });
-      if (res.ok) {
-        setPortfolio(newPortfolio);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setUpdatingPortfolio(false);
-    }
+      if (res.ok) setPortfolio(newPortfolio);
+    } catch (err) { console.error(err); } finally { setUpdatingPortfolio(false); }
+  };
+
+  const updateDocuments = async (newDocs: string[]) => {
+    if (!user.workerProfile) return;
+    setUpdatingDocuments(true);
+    try {
+      const res = await fetch(`/api/workers/${user.workerProfile.id}/documents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documents: newDocs })
+      });
+      if (res.ok) setDocuments(newDocs);
+    } catch (err) { console.error(err); } finally { setUpdatingDocuments(false); }
   };
 
   const fetchJobs = async () => {
@@ -928,11 +1150,36 @@ const Dashboard = ({ user }: { user: User }) => {
           phone: user.phone
         })
       });
-      if (res.ok) fetchJobs();
+      if (res.ok) {
+        await fetchJobs();
+        setReviewingJob(job);
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setPaying(null);
+    }
+  };
+
+  const submitReview = async (rating: number, comment: string) => {
+    if (!reviewingJob) return;
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: reviewingJob.id,
+          customer_id: user.id,
+          worker_id: reviewingJob.worker_id,
+          rating,
+          comment
+        })
+      });
+      if (res.ok) {
+        fetchJobs();
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -989,14 +1236,29 @@ const Dashboard = ({ user }: { user: User }) => {
                   <div key={job.id} className="p-6 hover:bg-zinc-50 transition-colors">
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                          <Hammer className="w-6 h-6" />
+                        <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 overflow-hidden">
+                          {user.role === 'customer' && job.profile_photo ? (
+                            <img src={job.profile_photo} alt={job.worker_name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <Hammer className="w-6 h-6" />
+                          )}
                         </div>
                         <div>
                           <h3 className="font-bold text-zinc-900">{job.service_type}</h3>
-                          <p className="text-sm text-zinc-500">
-                            {user.role === 'customer' ? `Worker: ${job.worker_name}` : `Customer: ${job.customer_name}`}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-zinc-500">
+                              {user.role === 'customer' ? `Worker: ${job.worker_name}` : `Customer: ${job.customer_name}`}
+                            </p>
+                            {user.role === 'customer' && (
+                              <div className="flex items-center gap-1">
+                                {job.is_online ? (
+                                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" title="Worker is Online" />
+                                ) : (
+                                  <div className="w-2 h-2 bg-zinc-300 rounded-full" title="Worker is Offline" />
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <span className={cn("px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider", getStatusColor(job.status))}>
@@ -1081,6 +1343,14 @@ const Dashboard = ({ user }: { user: User }) => {
                             Start Job
                           </button>
                         )}
+                        {user.role === 'worker' && job.status === 'in_progress' && (
+                          <button 
+                            onClick={() => updateStatus(job.id, 'completed')}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700"
+                          >
+                            Mark as Completed
+                          </button>
+                        )}
                         {user.role === 'customer' && job.status === 'in_progress' && (
                           <button 
                             onClick={() => handlePayment(job)}
@@ -1089,6 +1359,15 @@ const Dashboard = ({ user }: { user: User }) => {
                           >
                             <CreditCard className="w-4 h-4" />
                             {paying === job.id ? 'Processing...' : 'Pay via M-Pesa'}
+                          </button>
+                        )}
+                        {user.role === 'customer' && job.status === 'completed' && !job.is_reviewed && (
+                          <button 
+                            onClick={() => setReviewingJob(job)}
+                            className="flex items-center gap-2 bg-yellow-50 text-yellow-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-yellow-100 transition-colors"
+                          >
+                            <Star className="w-4 h-4 fill-yellow-500 text-yellow-500" />
+                            Rate Service
                           </button>
                         )}
                       </div>
@@ -1106,7 +1385,11 @@ const Dashboard = ({ user }: { user: User }) => {
           <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-16 h-16 rounded-2xl bg-zinc-100 flex items-center justify-center overflow-hidden">
-                <UserIcon className="w-8 h-8 text-zinc-400" />
+                {user.profile_photo ? (
+                  <img src={user.profile_photo} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <UserIcon className="w-8 h-8 text-zinc-400" />
+                )}
               </div>
               <div>
                 <h3 className="font-bold text-zinc-900">{user.name}</h3>
@@ -1133,6 +1416,38 @@ const Dashboard = ({ user }: { user: User }) => {
                     <span className="flex items-center gap-1 font-medium text-emerald-600">
                       <CheckCircle2 className="w-4 h-4" /> Yes
                     </span>
+                  </div>
+                  <div className="pt-4 border-t border-zinc-100 mt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-zinc-900">Availability</p>
+                        <p className="text-[10px] text-zinc-500">Visible to customers</p>
+                      </div>
+                      <button 
+                        onClick={async () => {
+                          if (!user.workerProfile) return;
+                          const newStatus = !user.workerProfile.is_available;
+                          const res = await fetch(`/api/workers/${user.workerProfile.id}/availability`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ is_available: newStatus })
+                          });
+                          if (res.ok) {
+                            // Update local state - this is a bit hacky but works for demo
+                            window.location.reload();
+                          }
+                        }}
+                        className={cn(
+                          "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
+                          user.workerProfile?.is_available ? "bg-emerald-600" : "bg-zinc-200"
+                        )}
+                      >
+                        <span className={cn(
+                          "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                          user.workerProfile?.is_available ? "translate-x-6" : "translate-x-1"
+                        )} />
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -1191,8 +1506,57 @@ const Dashboard = ({ user }: { user: User }) => {
               <p className="text-[10px] text-zinc-400 mt-4 italic">Showcase your best work to attract more customers.</p>
             </div>
           )}
+
+          {/* Document Management for Workers */}
+          {user.role === 'worker' && (
+            <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-zinc-900">Verification Docs</h3>
+                <button 
+                  onClick={() => updateDocuments([...documents, `https://picsum.photos/seed/doc-${Math.random()}/400/600`])}
+                  disabled={updatingDocuments}
+                  className="text-emerald-600 p-1 hover:bg-emerald-50 rounded-lg transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {documents.map((doc, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 bg-zinc-50 rounded-xl border border-zinc-100 group">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <span className="text-xs font-medium text-zinc-600">ID_Document_{i+1}.pdf</span>
+                    </div>
+                    <button 
+                      onClick={() => updateDocuments(documents.filter((_, idx) => idx !== i))}
+                      className="text-zinc-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {documents.length === 0 && (
+                  <div className="py-6 text-center border-2 border-dashed border-zinc-100 rounded-2xl">
+                    <p className="text-xs text-zinc-400">No documents uploaded.</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-4 italic">Upload your ID and certificates for verification.</p>
+            </div>
+          )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {reviewingJob && (
+          <ReviewModal 
+            isOpen={!!reviewingJob}
+            onClose={() => setReviewingJob(null)}
+            job={reviewingJob}
+            onSubmit={submitReview}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1201,7 +1565,13 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [jobs, setJobs] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'categories' | 'transactions' | 'analytics'>('overview');
+  const [newCategory, setNewCategory] = useState({ name: '', icon: 'Hammer' });
+  const [verifyingUser, setVerifyingUser] = useState<any>(null);
 
   useEffect(() => {
     fetchAdminData();
@@ -1210,19 +1580,30 @@ const AdminDashboard = () => {
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      const [statsRes, usersRes, jobsRes] = await Promise.all([
+      const [statsRes, usersRes, jobsRes, catsRes, transRes, analyticsRes] = await Promise.all([
         fetch('/api/admin/stats'),
         fetch('/api/admin/users'),
-        fetch('/api/admin/jobs')
+        fetch('/api/admin/jobs'),
+        fetch('/api/categories'),
+        fetch('/api/admin/transactions'),
+        fetch('/api/admin/analytics')
       ]);
-      const [statsData, usersData, jobsData] = await Promise.all([
+      
+      const [statsData, usersData, jobsData, catsData, transData, analyticsData] = await Promise.all([
         statsRes.json(),
         usersRes.json(),
-        jobsRes.json()
+        jobsRes.json(),
+        catsRes.json(),
+        transRes.json(),
+        analyticsRes.json()
       ]);
+
       setStats(statsData);
       setUsers(usersData);
       setJobs(jobsData);
+      setCategories(catsData);
+      setTransactions(transData);
+      setAnalytics(analyticsData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -1230,19 +1611,48 @@ const AdminDashboard = () => {
     }
   };
 
-  const toggleVerify = async (workerId: number, currentStatus: boolean) => {
+  const setVerifyStatus = async (workerId: number, status: boolean) => {
     try {
       const res = await fetch(`/api/admin/workers/${workerId}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_verified: !currentStatus })
+        body: JSON.stringify({ is_verified: status })
+      });
+      if (res.ok) fetchAdminData();
+    } catch (err) { console.error(err); }
+  };
+
+  const toggleSuspend = async (userId: number, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/suspend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_suspended: !currentStatus })
+      });
+      if (res.ok) fetchAdminData();
+    } catch (err) { console.error(err); }
+  };
+
+  const addCategory = async () => {
+    if (!newCategory.name) return;
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCategory)
       });
       if (res.ok) {
+        setNewCategory({ name: '', icon: 'Hammer' });
         fetchAdminData();
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
+  };
+
+  const deleteCategory = async (id: number) => {
+    try {
+      const res = await fetch(`/api/admin/categories/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchAdminData();
+    } catch (err) { console.error(err); }
   };
 
   if (loading) return (
@@ -1251,103 +1661,404 @@ const AdminDashboard = () => {
     </div>
   );
 
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: LayoutGrid },
+    { id: 'users', label: 'Users & Workers', icon: UserIcon },
+    { id: 'categories', label: 'Categories', icon: Hammer },
+    { id: 'transactions', label: 'Transactions', icon: CreditCard },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  ];
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-zinc-900 tracking-tight">Admin Control Center</h1>
-        <p className="text-zinc-500">Real-time platform monitoring and management.</p>
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-zinc-900 tracking-tight">Admin Control Center</h1>
+          <p className="text-zinc-500">Real-time platform monitoring and management.</p>
+        </div>
+        <div className="flex bg-zinc-100 p-1 rounded-2xl">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
+                activeTab === tab.id ? "bg-white text-emerald-600 shadow-sm" : "text-zinc-500 hover:text-zinc-900"
+              )}
+            >
+              <tab.icon className="w-4 h-4" />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-        {[
-          { label: 'Total Users', value: stats?.users, icon: UserIcon, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Active Workers', value: stats?.workers, icon: Hammer, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Total Jobs', value: stats?.jobs, icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: 'Total Revenue', value: `KES ${stats?.revenue}`, icon: CreditCard, color: 'text-orange-600', bg: 'bg-orange-50' },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
-            <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4", stat.bg)}>
-              <stat.icon className={cn("w-6 h-6", stat.color)} />
+      {activeTab === 'overview' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+            {[
+              { label: 'Total Users', value: stats?.users, icon: UserIcon, color: 'text-blue-600', bg: 'bg-blue-50' },
+              { label: 'Active Workers', value: stats?.workers, icon: Hammer, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+              { label: 'Total Jobs', value: stats?.jobs, icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+              { label: 'Total Revenue', value: `KES ${stats?.revenue}`, icon: CreditCard, color: 'text-orange-600', bg: 'bg-orange-50' },
+            ].map((stat, i) => (
+              <div key={i} className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-4", stat.bg)}>
+                  <stat.icon className={cn("w-6 h-6", stat.color)} />
+                </div>
+                <p className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-1">{stat.label}</p>
+                <p className="text-2xl font-black text-zinc-900">{stat.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Recent Users */}
+            <div className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
+              <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                <h2 className="font-bold text-zinc-900">Recent Registrations</h2>
+                <button onClick={() => setActiveTab('users')} className="text-xs font-bold text-emerald-600 hover:underline">View All</button>
+              </div>
+              <div className="divide-y divide-zinc-100">
+                {users.slice(0, 5).map((u: any) => (
+                  <div key={u.id} className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-400 overflow-hidden">
+                        {u.profile_photo ? (
+                          <img src={u.profile_photo} alt={u.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <UserIcon className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-zinc-900">{u.name}</p>
+                        <p className="text-xs text-zinc-500">{u.email}</p>
+                      </div>
+                    </div>
+                    <span className={cn(
+                      "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
+                      u.role === 'worker' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+                    )}>
+                      {u.role}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <p className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-1">{stat.label}</p>
-            <p className="text-2xl font-black text-zinc-900">{stat.value}</p>
-          </div>
-        ))}
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Users */}
-        <div className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-            <h2 className="font-bold text-zinc-900">Recent Registrations</h2>
-            <Link to="#" className="text-xs font-bold text-emerald-600 hover:underline">View All</Link>
+            {/* Recent Jobs */}
+            <div className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
+              <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+                <h2 className="font-bold text-zinc-900">Platform Activity</h2>
+                <Link to="#" className="text-xs font-bold text-emerald-600 hover:underline">Live Feed</Link>
+              </div>
+              <div className="divide-y divide-zinc-100">
+                {jobs.slice(0, 5).map((j: any) => (
+                  <div key={j.id} className="px-6 py-4">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-sm font-bold text-zinc-900">{j.service_type}</p>
+                      <span className="text-[10px] font-bold text-zinc-400">{new Date(j.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <p className="text-xs text-zinc-500">
+                      <span className="font-semibold text-zinc-700">{j.customer_name}</span> → <span className="font-semibold text-zinc-700">{j.worker_name}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="divide-y divide-zinc-100">
-            {users.slice(0, 5).map((u: any) => (
-              <div key={u.id} className="px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-400">
-                    <UserIcon className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-zinc-900">{u.name}</p>
-                    <p className="text-xs text-zinc-500">{u.email}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={cn(
-                    "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
-                    u.role === 'worker' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
-                  )}>
-                    {u.role}
-                  </span>
-                  {u.role === 'worker' && (
-                    <button 
-                      onClick={() => toggleVerify(u.worker_id, !!u.is_verified)}
-                      className={cn(
-                        "p-1.5 rounded-lg transition-colors",
-                        u.is_verified ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-zinc-100 text-zinc-400 hover:bg-zinc-200"
+        </motion.div>
+      )}
+
+      {activeTab === 'users' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-zinc-50 border-b border-zinc-100">
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {users.map((u: any) => (
+                  <tr key={u.id} className="hover:bg-zinc-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-400 overflow-hidden">
+                          {u.profile_photo ? (
+                            <img src={u.profile_photo} alt={u.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <UserIcon className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-zinc-900">{u.name}</p>
+                          <p className="text-xs text-zinc-500">{u.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={cn(
+                        "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
+                        u.role === 'worker' ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+                      )}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {u.is_suspended ? (
+                        <span className="flex items-center gap-1 text-xs font-bold text-red-600">
+                          <AlertTriangle className="w-3 h-3" /> Suspended
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
+                          <CheckCircle2 className="w-3 h-3" /> Active
+                        </span>
                       )}
-                      title={u.is_verified ? "Unverify Worker" : "Verify Worker"}
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {u.role === 'worker' && (
+                          <button 
+                            onClick={() => setVerifyingUser(u)}
+                            className={cn(
+                              "p-2 rounded-xl transition-all",
+                              u.is_verified ? "bg-emerald-50 text-emerald-600" : "bg-zinc-100 text-zinc-400 hover:bg-zinc-200"
+                            )}
+                            title="Verify Documents"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => toggleSuspend(u.id, !!u.is_suspended)}
+                          className={cn(
+                            "p-2 rounded-xl transition-all",
+                            u.is_suspended ? "bg-red-50 text-red-600" : "bg-zinc-100 text-zinc-400 hover:bg-red-50 hover:text-red-600"
+                          )}
+                          title={u.is_suspended ? "Unsuspend" : "Suspend"}
+                        >
+                          <Ban className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </motion.div>
+      )}
 
-        {/* Recent Jobs */}
-        <div className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-            <h2 className="font-bold text-zinc-900">Platform Activity</h2>
-            <Link to="#" className="text-xs font-bold text-emerald-600 hover:underline">Live Feed</Link>
+      {activeTab === 'categories' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="md:col-span-1 bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm h-fit">
+            <h3 className="font-bold text-zinc-900 mb-4">Add New Category</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1 block">Category Name</label>
+                <input 
+                  type="text" 
+                  value={newCategory.name}
+                  onChange={e => setNewCategory({...newCategory, name: e.target.value})}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="e.g. Landscaping"
+                />
+              </div>
+              <button 
+                onClick={addCategory}
+                className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all"
+              >
+                Create Category
+              </button>
+            </div>
           </div>
-          <div className="divide-y divide-zinc-100">
-            {jobs.slice(0, 5).map((j: any) => (
-              <div key={j.id} className="px-6 py-4">
-                <div className="flex justify-between items-start mb-1">
-                  <p className="text-sm font-bold text-zinc-900">{j.service_type}</p>
-                  <span className="text-[10px] font-bold text-zinc-400">{new Date(j.created_at).toLocaleDateString()}</span>
+          <div className="md:col-span-2 bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
+            <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50">
+              <h3 className="font-bold text-zinc-900">Existing Categories</h3>
+            </div>
+            <div className="divide-y divide-zinc-100">
+              {categories.map(cat => (
+                <div key={cat.id} className="px-6 py-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <Hammer className="w-5 h-5" />
+                    </div>
+                    <p className="font-bold text-zinc-900">{cat.name}</p>
+                  </div>
+                  <button 
+                    onClick={() => deleteCategory(cat.id)}
+                    className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <p className="text-xs text-zinc-500">
-                  <span className="font-semibold text-zinc-700">{j.customer_name}</span> → <span className="font-semibold text-zinc-700">{j.worker_name}</span>
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className={cn(
-                    "w-2 h-2 rounded-full",
-                    j.status === 'completed' ? "bg-emerald-500" : "bg-yellow-500"
-                  )} />
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{j.status}</span>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {activeTab === 'transactions' && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-3xl border border-zinc-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-zinc-50 border-b border-zinc-100">
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Transaction ID</th>
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Customer</th>
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Worker</th>
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {transactions.map((t: any) => (
+                  <tr key={t.id} className="hover:bg-zinc-50/50 transition-colors">
+                    <td className="px-6 py-4 font-mono text-xs text-zinc-600">{t.transaction_id}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-zinc-900">{t.customer_name}</td>
+                    <td className="px-6 py-4 text-sm text-zinc-600">{t.worker_name}</td>
+                    <td className="px-6 py-4 text-sm font-black text-emerald-600">KES {t.amount}</td>
+                    <td className="px-6 py-4 text-xs text-zinc-500">{new Date(t.created_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+      )}
+
+      {activeTab === 'analytics' && analytics && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <h3 className="font-bold text-zinc-900 mb-6">Job Volume (Last 7 Days)</h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={analytics.jobsByDay}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
+                    <Tooltip 
+                      contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                      cursor={{fill: '#f9fafb'}}
+                    />
+                    <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} barSize={32} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-3xl border border-zinc-200 shadow-sm">
+              <h3 className="font-bold text-zinc-900 mb-6">Revenue Trend (KES)</h3>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={analytics.revenueByDay}>
+                    <defs>
+                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
+                    <Tooltip 
+                      contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    />
+                    <Area type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Verification Modal */}
+      <AnimatePresence>
+        {verifyingUser && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setVerifyingUser(null)}
+              className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[40px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-black text-zinc-900 tracking-tight">Verify Worker</h2>
+                  <button onClick={() => setVerifyingUser(null)} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4 p-4 bg-zinc-50 rounded-3xl border border-zinc-100">
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <UserIcon className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-zinc-900">{verifyingUser.name}</p>
+                      <p className="text-sm text-zinc-500">{verifyingUser.category} • {verifyingUser.email}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-900 mb-3 uppercase tracking-widest">Submitted Documents</h3>
+                    <div className="space-y-3">
+                      {verifyingUser.documents ? JSON.parse(verifyingUser.documents).map((doc: string, i: number) => (
+                        <div key={i} className="flex items-center justify-between p-4 bg-white border border-zinc-200 rounded-2xl hover:border-emerald-500 transition-colors cursor-pointer group">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-400 group-hover:bg-emerald-50 group-hover:text-emerald-600">
+                              <Camera className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-bold text-zinc-700">Document_{i+1}.jpg</span>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-zinc-300 group-hover:text-emerald-600" />
+                        </div>
+                      )) : (
+                        <div className="p-8 text-center border-2 border-dashed border-zinc-100 rounded-3xl">
+                          <p className="text-sm text-zinc-400">No documents submitted yet.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 pt-4">
+                    <button 
+                      onClick={() => {
+                        setVerifyStatus(verifyingUser.worker_id, true);
+                        setVerifyingUser(null);
+                      }}
+                      className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                    >
+                      Approve & Verify
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setVerifyStatus(verifyingUser.worker_id, false);
+                        setVerifyingUser(null);
+                      }}
+                      className="flex-1 bg-zinc-100 text-zinc-600 py-4 rounded-2xl font-bold hover:bg-zinc-200 transition-all"
+                    >
+                      Reject
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
+            </motion.div>
           </div>
-        </div>
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1386,9 +2097,9 @@ export default function App() {
         <main>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/login" element={!user ? <Login onLogin={handleLogin} /> : <Navigate to="/dashboard" />} />
-            <Route path="/register" element={!user ? <Register onLogin={handleLogin} /> : <Navigate to="/dashboard" />} />
-            <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
+            <Route path="/login" element={!user ? <Login onLogin={handleLogin} /> : (user.role === 'admin' ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />)} />
+            <Route path="/register" element={!user ? <Register onLogin={handleLogin} /> : (user.role === 'admin' ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />)} />
+            <Route path="/dashboard" element={user ? (user.role === 'admin' ? <Navigate to="/admin" /> : <Dashboard user={user} />) : <Navigate to="/login" />} />
             <Route path="/find-worker" element={user?.role === 'customer' ? <FindWorker user={user} /> : <Navigate to="/login" />} />
             <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" />} />
           </Routes>
