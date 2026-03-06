@@ -31,6 +31,7 @@ try {
       category TEXT NOT NULL,
       experience_years INTEGER,
       bio TEXT,
+      location TEXT,
       profile_photo TEXT,
       hourly_rate REAL,
       latitude REAL,
@@ -115,6 +116,7 @@ const migrate = () => {
   addUserColumn('last_seen', 'DATETIME DEFAULT CURRENT_TIMESTAMP');
   
   addWorkerColumn('profile_photo', 'TEXT');
+  addWorkerColumn('location', 'TEXT');
   addWorkerColumn('is_verified', 'BOOLEAN DEFAULT 0');
   addWorkerColumn('is_available', 'BOOLEAN DEFAULT 1');
   addWorkerColumn('portfolio', 'TEXT');
@@ -142,22 +144,24 @@ migrate();
 // Seeding Logic
 const seedData = () => {
   const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as any;
+  const reviewCount = db.prepare("SELECT COUNT(*) as count FROM reviews").get() as any;
+
   if (userCount.count === 0) {
     console.log("Seeding database with Kenyan examples...");
     
     const sampleWorkers = [
-      { name: "James Kamau", email: "kamau@example.com", phone: "0712345678", category: "Plumbing", bio: "Expert plumber with 10 years experience in Roysambu. Specializes in leak detection and bathroom fittings.", rate: 1200, verified: 1, portfolio: ['https://images.unsplash.com/photo-1584622650111-993a426fbf0a', 'https://images.unsplash.com/photo-1504148455328-c376907d081c'], photo: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=400&h=400&fit=crop' },
-      { name: "Mary Atieno", email: "mary@example.com", phone: "0722345678", category: "Cleaning", bio: "Professional deep cleaning services for homes and offices. Very thorough and reliable.", rate: 800, verified: 1, portfolio: ['https://images.unsplash.com/photo-1581578731548-c64695cc6958', 'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac'], photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop' },
-      { name: "David Omondi", email: "david@example.com", phone: "0733345678", category: "Electrical", bio: "Certified electrician. I handle house wiring, socket repairs, and solar installations.", rate: 1500, verified: 0, portfolio: ['https://images.unsplash.com/photo-1621905251189-08b45d6a269e', 'https://images.unsplash.com/photo-1558211583-d28f610b15a0'], photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop' },
-      { name: "Sarah Njeri", email: "sarah@example.com", phone: "0744345678", category: "Painting", bio: "Creative painter and interior decorator. I bring life to your walls with quality finishes.", rate: 1000, verified: 1, portfolio: ['https://images.unsplash.com/photo-1589939705384-5185137a7f0f', 'https://images.unsplash.com/photo-1562664377-709f2c337eb2'], photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop' },
-      { name: "Peter Kipkorir", email: "peter@example.com", phone: "0755345678", category: "Carpentry", bio: "Custom furniture maker and repair expert. Quality woodwork guaranteed.", rate: 1300, verified: 0, portfolio: ['https://images.unsplash.com/photo-1533090161767-e6ffed986c88', 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85'], photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop' },
-      { name: "Faith Wambui", email: "faith@example.com", phone: "0766345678", category: "Technician", bio: "Appliance repair specialist. I fix fridges, microwaves, and washing machines.", rate: 1100, verified: 1, portfolio: ['https://images.unsplash.com/photo-1581092918056-0c4c3acd3789', 'https://images.unsplash.com/photo-1581092160562-40aa08e78837'], photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop' }
+      { name: "James Kamau", email: "kamau@example.com", phone: "0712345678", category: "Plumbing", location: "Roysambu", bio: "Expert plumber with 10 years experience in Roysambu. Specializes in leak detection and bathroom fittings.", rate: 1200, verified: 1, portfolio: ['https://images.unsplash.com/photo-1584622650111-993a426fbf0a', 'https://images.unsplash.com/photo-1504148455328-c376907d081c'], photo: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=400&h=400&fit=crop' },
+      { name: "Mary Atieno", email: "mary@example.com", phone: "0722345678", category: "Cleaning", location: "Kasarani", bio: "Professional deep cleaning services for homes and offices. Very thorough and reliable.", rate: 800, verified: 1, portfolio: ['https://images.unsplash.com/photo-1581578731548-c64695cc6958', 'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac'], photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop' },
+      { name: "David Omondi", email: "david@example.com", phone: "0733345678", category: "Electrical", location: "Westlands", bio: "Certified electrician. I handle house wiring, socket repairs, and solar installations.", rate: 1500, verified: 0, portfolio: ['https://images.unsplash.com/photo-1621905251189-08b45d6a269e', 'https://images.unsplash.com/photo-1558211583-d28f610b15a0'], photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop' },
+      { name: "Sarah Njeri", email: "sarah@example.com", phone: "0744345678", category: "Painting", location: "Kilimani", bio: "Creative painter and interior decorator. I bring life to your walls with quality finishes.", rate: 1000, verified: 1, portfolio: ['https://images.unsplash.com/photo-1589939705384-5185137a7f0f', 'https://images.unsplash.com/photo-1562664377-709f2c337eb2'], photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop' },
+      { name: "Peter Kipkorir", email: "peter@example.com", phone: "0755345678", category: "Carpentry", location: "Zimmerman", bio: "Custom furniture maker and repair expert. Quality woodwork guaranteed.", rate: 1300, verified: 0, portfolio: ['https://images.unsplash.com/photo-1533090161767-e6ffed986c88', 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85'], photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop' },
+      { name: "Faith Wambui", email: "faith@example.com", phone: "0766345678", category: "Technician", location: "Kahawa West", bio: "Appliance repair specialist. I fix fridges, microwaves, and washing machines.", rate: 1100, verified: 1, portfolio: ['https://images.unsplash.com/photo-1581092918056-0c4c3acd3789', 'https://images.unsplash.com/photo-1581092160562-40aa08e78837'], photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop' }
     ];
 
     for (const w of sampleWorkers) {
       const userResult = db.prepare("INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, 'password123', 'worker')").run(w.name, w.email, w.phone);
       const userId = userResult.lastInsertRowid;
-      db.prepare("INSERT INTO workers (user_id, category, experience_years, bio, hourly_rate, is_verified, portfolio, profile_photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(userId, w.category, 5, w.bio, w.rate, w.verified, JSON.stringify(w.portfolio), w.photo);
+      db.prepare("INSERT INTO workers (user_id, category, experience_years, bio, location, hourly_rate, is_verified, portfolio, profile_photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(userId, w.category, 5, w.bio, w.location, w.rate, w.verified, JSON.stringify(w.portfolio), w.photo);
     }
 
     // Add a sample customer
@@ -175,8 +179,34 @@ const seedData = () => {
     for (const cat of initialCategories) {
       db.prepare("INSERT INTO categories (name, icon) VALUES (?, ?)").run(cat.name, cat.icon);
     }
+  }
 
-    console.log("Seeding complete.");
+  if (reviewCount.count === 0) {
+    console.log("Seeding reviews...");
+    const workers = db.prepare("SELECT id FROM workers").all() as any[];
+    const customer = db.prepare("SELECT id FROM users WHERE role = 'customer'").get() as any;
+    
+    if (customer && workers.length > 0) {
+      const sampleReviews = [
+        { rating: 5, comment: "Excellent work! Very professional and timely." },
+        { rating: 4, comment: "Good service, would recommend." },
+        { rating: 5, comment: "Best in the business. Fixed my leak in minutes." }
+      ];
+      
+      workers.forEach((w, i) => {
+        const review = sampleReviews[i % sampleReviews.length];
+        const jobResult = db.prepare(`
+          INSERT INTO job_requests (customer_id, worker_id, service_type, description, status)
+          VALUES (?, ?, 'Seeded Job', 'Initial seed job', 'completed')
+        `).run(customer.id, w.id);
+        
+        db.prepare(`
+          INSERT INTO reviews (job_id, customer_id, worker_id, rating, comment)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(jobResult.lastInsertRowid, customer.id, w.id, review.rating, review.comment);
+      });
+      console.log("Review seeding complete.");
+    }
   }
 
   // Ensure the specific admin user always exists and is up to date
@@ -210,8 +240,8 @@ async function startServer() {
       const userId = result.lastInsertRowid;
       
       if (role === 'worker') {
-        const { category, experience_years, bio, hourly_rate } = req.body;
-        db.prepare("INSERT INTO workers (user_id, category, experience_years, bio, hourly_rate) VALUES (?, ?, ?, ?, ?)").run(userId, category, experience_years, bio, hourly_rate);
+        const { category, experience_years, bio, location, hourly_rate } = req.body;
+        db.prepare("INSERT INTO workers (user_id, category, experience_years, bio, location, hourly_rate) VALUES (?, ?, ?, ?, ?, ?)").run(userId, category, experience_years, bio, location, hourly_rate);
       }
       
       res.json({ success: true, userId });
@@ -245,6 +275,7 @@ async function startServer() {
     let query = `
       SELECT u.name, u.phone, u.last_seen, w.*, 
       (SELECT AVG(rating) FROM reviews WHERE worker_id = w.id) as avg_rating,
+      (SELECT COUNT(*) FROM reviews WHERE worker_id = w.id) as review_count,
       CASE WHEN u.last_seen > datetime('now', '-5 minutes') THEN 1 ELSE 0 END as is_online
       FROM workers w
       JOIN users u ON w.user_id = u.id

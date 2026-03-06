@@ -477,7 +477,7 @@ const Register = ({ onLogin }: { onLogin: (user: User) => void }) => {
   const [role, setRole] = useState<'customer' | 'worker'>('customer');
   const [formData, setFormData] = useState({
     name: '', email: '', phone: '', password: '',
-    category: 'Plumbing', experience_years: 0, bio: '', hourly_rate: 1000
+    category: 'Plumbing', experience_years: 0, bio: '', location: '', hourly_rate: 1000
   });
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -614,6 +614,16 @@ const Register = ({ onLogin }: { onLogin: (user: User) => void }) => {
                 />
               </div>
               <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Location / Area</label>
+                <input 
+                  type="text" required 
+                  value={formData.location}
+                  onChange={e => setFormData({...formData, location: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="e.g. Roysambu, Kasarani"
+                />
+              </div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Bio / Experience</label>
                 <textarea 
                   rows={3}
@@ -641,13 +651,18 @@ const Register = ({ onLogin }: { onLogin: (user: User) => void }) => {
 const FindWorker = ({ user }: { user: User }) => {
   const [workers, setWorkers] = useState<WorkerProfile[]>([]);
   const [category, setCategory] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [locationQuery, setLocationQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedWorker, setSelectedWorker] = useState<WorkerProfile | null>(null);
+  const [bookingStep, setBookingStep] = useState<'profile' | 'booking' | 'confirmation'>('profile');
   const [jobDescription, setJobDescription] = useState('');
   const [preferredDate, setPreferredDate] = useState('');
   const [urgency, setUrgency] = useState<'low' | 'medium' | 'high' | 'emergency'>('medium');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [booking, setBooking] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
   const navigate = useNavigate();
@@ -677,6 +692,15 @@ const FindWorker = ({ user }: { user: User }) => {
     }
   };
 
+  const filteredWorkers = workers.filter(w => {
+    const matchesSearch = w.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         w.category?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesLocation = !locationQuery || 
+                           w.location?.toLowerCase().includes(locationQuery.toLowerCase()) ||
+                           w.bio?.toLowerCase().includes(locationQuery.toLowerCase());
+    return matchesSearch && matchesLocation;
+  });
+
   const fetchReviews = async (workerId: number) => {
     setLoadingReviews(true);
     try {
@@ -690,8 +714,30 @@ const FindWorker = ({ user }: { user: User }) => {
     }
   };
 
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    setUploading(true);
+    const newPhotos: string[] = [];
+    let processed = 0;
+
+    Array.from(files).forEach((file: File) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        newPhotos.push(reader.result as string);
+        processed++;
+        if (processed === files.length) {
+          setPhotos(prev => [...prev, ...newPhotos]);
+          setUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleBook = async () => {
-    if (!selectedWorker) return;
+    if (!selectedWorker || !jobDescription || !preferredDate) return;
     setBooking(true);
     try {
       const res = await fetch('/api/jobs', {
@@ -710,6 +756,12 @@ const FindWorker = ({ user }: { user: User }) => {
         })
       });
       if (res.ok) {
+        // Reset form
+        setJobDescription('');
+        setPreferredDate('');
+        setUrgency('medium');
+        setPhotos([]);
+        setSelectedWorker(null);
         navigate('/dashboard');
       }
     } catch (err) {
@@ -752,17 +804,31 @@ const FindWorker = ({ user }: { user: User }) => {
 
         {/* Main Content */}
         <div className="flex-1">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 gap-4">
             <h1 className="text-2xl font-bold text-zinc-900">
               {category || 'All'} Workers Nearby
             </h1>
-            <div className="relative">
-              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <input 
-                type="text" 
-                placeholder="Search by name..."
-                className="pl-10 pr-4 py-2 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-              />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search name or service..."
+                  className="w-full pl-10 pr-4 py-2 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                />
+              </div>
+              <div className="relative flex-1 sm:w-64">
+                <MapPin className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <input 
+                  type="text" 
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  placeholder="Enter your area..."
+                  className="w-full pl-10 pr-4 py-2 rounded-xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                />
+              </div>
             </div>
           </div>
 
@@ -772,18 +838,22 @@ const FindWorker = ({ user }: { user: User }) => {
                 <div key={i} className="h-64 bg-zinc-100 rounded-2xl animate-pulse" />
               ))}
             </div>
-          ) : workers.length === 0 ? (
+          ) : filteredWorkers.length === 0 ? (
             <div className="text-center py-20 bg-zinc-50 rounded-3xl border-2 border-dashed border-zinc-200">
               <AlertCircle className="w-12 h-12 text-zinc-300 mx-auto mb-4" />
-              <p className="text-zinc-500 font-medium">No workers found in this category.</p>
+              <p className="text-zinc-500 font-medium">No workers found matching your search.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {workers.map(worker => (
+              {filteredWorkers.map(worker => (
                 <motion.div 
                   key={worker.id}
                   layoutId={`worker-${worker.id}`}
-                  className="bg-white rounded-2xl border border-zinc-200 overflow-hidden hover:shadow-lg transition-shadow group"
+                  className="bg-white rounded-2xl border border-zinc-200 overflow-hidden hover:shadow-lg transition-shadow group cursor-pointer"
+                  onClick={() => {
+                    setSelectedWorker(worker);
+                    setBookingStep('profile');
+                  }}
                 >
                   <div className="h-40 bg-zinc-100 relative">
                     <img 
@@ -835,6 +905,10 @@ const FindWorker = ({ user }: { user: User }) => {
                           </div>
                         </div>
                         <p className="text-sm text-emerald-600 font-semibold">{worker.category}</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <MapPin className="w-3 h-3 text-zinc-400" />
+                          <span className="text-xs text-zinc-500">{worker.location || 'Nairobi'}</span>
+                        </div>
                         <div className="flex items-center gap-1 mt-1">
                           <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
                           <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Available for Hire</span>
@@ -845,6 +919,11 @@ const FindWorker = ({ user }: { user: User }) => {
                         <span className="text-sm font-bold text-zinc-700">
                           {worker.avg_rating ? Number(worker.avg_rating).toFixed(1) : 'New'}
                         </span>
+                        {worker.review_count !== undefined && worker.review_count > 0 && (
+                          <span className="text-[10px] text-zinc-400 font-medium">
+                            ({worker.review_count})
+                          </span>
+                        )}
                       </div>
                     </div>
                     <p className="text-sm text-zinc-500 line-clamp-2 mb-4">{worker.bio}</p>
@@ -854,7 +933,11 @@ const FindWorker = ({ user }: { user: User }) => {
                         <p className="text-lg font-bold text-zinc-900">KES {worker.hourly_rate}<span className="text-xs text-zinc-400 font-normal">/hr</span></p>
                       </div>
                       <button 
-                        onClick={() => setSelectedWorker(worker)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedWorker(worker);
+                          setBookingStep('booking');
+                        }}
                         className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors"
                       >
                         Book Now
@@ -889,11 +972,15 @@ const FindWorker = ({ user }: { user: User }) => {
                 <div className="flex justify-between items-start mb-6">
                   <div className="flex gap-4">
                     <div className="w-16 h-16 rounded-2xl bg-zinc-100 flex items-center justify-center overflow-hidden">
-                      <UserIcon className="w-8 h-8 text-zinc-400" />
+                      {selectedWorker.profile_photo ? (
+                        <img src={selectedWorker.profile_photo} alt={selectedWorker.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <UserIcon className="w-8 h-8 text-zinc-400" />
+                      )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-2xl font-bold text-zinc-900">Book {selectedWorker.name}</h2>
+                        <h2 className="text-2xl font-bold text-zinc-900">{selectedWorker.name}</h2>
                         {selectedWorker.is_verified && (
                           <div className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider">
                             <ShieldCheck className="w-3 h-3" />
@@ -902,6 +989,13 @@ const FindWorker = ({ user }: { user: User }) => {
                         )}
                       </div>
                       <p className="text-emerald-600 font-semibold">{selectedWorker.category}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                        <span className="text-sm font-bold text-zinc-700">
+                          {selectedWorker.avg_rating ? Number(selectedWorker.avg_rating).toFixed(1) : 'New'}
+                        </span>
+                        <span className="text-xs text-zinc-400">({selectedWorker.review_count || 0} reviews)</span>
+                      </div>
                     </div>
                   </div>
                   <button onClick={() => setSelectedWorker(null)} className="p-2 hover:bg-zinc-100 rounded-full transition-colors">
@@ -910,137 +1004,276 @@ const FindWorker = ({ user }: { user: User }) => {
                 </div>
 
                 <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1">
-                  <div>
-                    <label className="block text-sm font-bold text-zinc-900 mb-2">Job Description</label>
-                    <textarea 
-                      rows={3}
-                      value={jobDescription}
-                      onChange={e => setJobDescription(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
-                      placeholder="Describe the issue or task in detail..."
-                    />
-                  </div>
+                  {bookingStep === 'profile' && (
+                    <div className="space-y-6">
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-2">About the Professional</h3>
+                        <p className="text-zinc-600 leading-relaxed">{selectedWorker.bio}</p>
+                      </div>
 
-                  {selectedWorker.portfolio && JSON.parse(selectedWorker.portfolio).length > 0 && (
-                    <div>
-                      <label className="block text-sm font-bold text-zinc-900 mb-2">Portfolio / Past Work</label>
-                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                        {JSON.parse(selectedWorker.portfolio).map((img: string, i: number) => (
-                          <img 
-                            key={i} 
-                            src={img} 
-                            className="w-32 h-32 rounded-xl object-cover border border-zinc-100 flex-shrink-0" 
-                            referrerPolicy="no-referrer"
-                          />
-                        ))}
+                      {selectedWorker.portfolio && JSON.parse(selectedWorker.portfolio).length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-3">Portfolio</h3>
+                          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                            {JSON.parse(selectedWorker.portfolio).map((img: string, i: number) => (
+                              <img 
+                                key={i} 
+                                src={img} 
+                                className="w-40 h-40 rounded-2xl object-cover border border-zinc-100 flex-shrink-0" 
+                                referrerPolicy="no-referrer"
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-3">Customer Reviews</h3>
+                        {loadingReviews ? (
+                          <div className="py-8 text-center">
+                            <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                          </div>
+                        ) : reviews.length === 0 ? (
+                          <div className="p-8 text-center bg-zinc-50 rounded-2xl border border-dashed border-zinc-200">
+                            <p className="text-sm text-zinc-400 italic">No reviews yet for this professional.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {reviews.map((r) => (
+                              <div key={r.id} className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                                <div className="flex justify-between items-center mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-zinc-200 flex items-center justify-center text-[10px] font-bold">
+                                      {r.customer_name?.charAt(0)}
+                                    </div>
+                                    <span className="text-sm font-bold text-zinc-900">{r.customer_name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-0.5">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star key={i} className={cn("w-3 h-3", i < r.rating ? "fill-yellow-400 text-yellow-400" : "text-zinc-200")} />
+                                    ))}
+                                  </div>
+                                </div>
+                                <p className="text-sm text-zinc-600 leading-relaxed">{r.comment}</p>
+                                <p className="text-[10px] text-zinc-400 mt-2">{new Date(r.created_at).toLocaleDateString()}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-6 border-t border-zinc-100">
+                        <button 
+                          onClick={() => setBookingStep('booking')}
+                          className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                        >
+                          Continue to Booking
+                        </button>
                       </div>
                     </div>
                   )}
 
-                  <div>
-                    <label className="block text-sm font-bold text-zinc-900 mb-2">Customer Reviews</label>
-                    {loadingReviews ? (
-                      <div className="py-4 text-center">
-                        <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                  {bookingStep === 'booking' && (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <button 
+                          onClick={() => setBookingStep('profile')}
+                          className="text-zinc-400 hover:text-zinc-900 transition-colors"
+                        >
+                          <ChevronRight className="w-5 h-5 rotate-180" />
+                        </button>
+                        <h3 className="text-lg font-bold text-zinc-900">Job Details</h3>
                       </div>
-                    ) : reviews.length === 0 ? (
-                      <p className="text-xs text-zinc-400 italic">No reviews yet.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {reviews.map((r) => (
-                          <div key={r.id} className="p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-xs font-bold text-zinc-900">{r.customer_name}</span>
-                              <div className="flex items-center gap-0.5">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star key={i} className={cn("w-3 h-3", i < r.rating ? "fill-yellow-400 text-yellow-400" : "text-zinc-200")} />
-                                ))}
-                              </div>
-                            </div>
-                            <p className="text-xs text-zinc-600 leading-relaxed">{r.comment}</p>
-                          </div>
-                        ))}
+
+                      <div>
+                        <label className="block text-sm font-bold text-zinc-900 mb-2">Job Description</label>
+                        <textarea 
+                          rows={3}
+                          value={jobDescription}
+                          onChange={e => setJobDescription(e.target.value)}
+                          className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
+                          placeholder="Describe the issue or task in detail..."
+                        />
                       </div>
-                    )}
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-emerald-600" /> Preferred Date & Time
-                      </label>
-                      <input 
-                        type="datetime-local"
-                        value={preferredDate}
-                        onChange={e => setPreferredDate(e.target.value)}
-                        className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-emerald-600" /> Urgency Level
-                      </label>
-                      <select 
-                        value={urgency}
-                        onChange={e => setUrgency(e.target.value as any)}
-                        className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
-                      >
-                        <option value="low">Low - No rush</option>
-                        <option value="medium">Medium - Within 24h</option>
-                        <option value="high">High - Same day</option>
-                        <option value="emergency">Emergency - ASAP</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
-                      <Camera className="w-4 h-4 text-emerald-600" /> Attach Photos
-                    </label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {photos.map((p, i) => (
-                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-200">
-                          <img src={p} className="w-full h-full object-cover" />
-                          <button 
-                            onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
-                            className="absolute top-1 right-1 bg-zinc-900/50 text-white p-1 rounded-full hover:bg-zinc-900"
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-emerald-600" /> Preferred Date & Time
+                          </label>
+                          <input 
+                            type="datetime-local"
+                            value={preferredDate}
+                            onChange={e => setPreferredDate(e.target.value)}
+                            className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                            <Zap className="w-4 h-4 text-emerald-600" /> Urgency Level
+                          </label>
+                          <select 
+                            value={urgency}
+                            onChange={e => setUrgency(e.target.value as any)}
+                            className="w-full px-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm"
                           >
-                            <X className="w-3 h-3" />
+                            <option value="low">Low - No rush</option>
+                            <option value="medium">Medium - Within 24h</option>
+                            <option value="high">High - Same day</option>
+                            <option value="emergency">Emergency - ASAP</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-zinc-900 mb-2 flex items-center gap-2">
+                          <Camera className="w-4 h-4 text-emerald-600" /> Attach Photos
+                        </label>
+                        <input 
+                          type="file" 
+                          multiple 
+                          accept="image/*" 
+                          className="hidden" 
+                          ref={fileInputRef}
+                          onChange={handlePhotoUpload}
+                        />
+                        <div className="grid grid-cols-4 gap-2">
+                          {photos.map((p, i) => (
+                            <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-zinc-200">
+                              <img src={p} className="w-full h-full object-cover" />
+                              <button 
+                                onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
+                                className="absolute top-1 right-1 bg-zinc-900/50 text-white p-1 rounded-full hover:bg-zinc-900"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
+                            className="aspect-square rounded-xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center text-zinc-400 hover:border-emerald-500 hover:text-emerald-500 transition-all disabled:opacity-50"
+                          >
+                            {uploading ? (
+                              <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <>
+                                <Camera className="w-6 h-6 mb-1" />
+                                <span className="text-[10px] font-bold">Add Photo</span>
+                              </>
+                            )}
                           </button>
                         </div>
-                      ))}
+                      </div>
+
+                      <div className="bg-zinc-50 p-4 rounded-2xl space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-zinc-500">Hourly Rate</span>
+                          <span className="font-bold text-zinc-900">KES {selectedWorker.hourly_rate}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-zinc-500">Service Fee</span>
+                          <span className="font-bold text-zinc-900">KES 100</span>
+                        </div>
+                        <div className="pt-3 border-t border-zinc-200 flex justify-between">
+                          <span className="font-bold text-zinc-900">Total Estimate</span>
+                          <span className="font-bold text-emerald-600">KES {selectedWorker.hourly_rate + 100}</span>
+                        </div>
+                      </div>
+
                       <button 
-                        onClick={() => setPhotos([...photos, `https://picsum.photos/seed/${Math.random()}/400/300`])}
-                        className="aspect-square rounded-xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center text-zinc-400 hover:border-emerald-500 hover:text-emerald-500 transition-all"
+                        onClick={() => setBookingStep('confirmation')}
+                        disabled={!jobDescription || !preferredDate}
+                        className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Camera className="w-6 h-6 mb-1" />
-                        <span className="text-[10px] font-bold">Add Photo</span>
+                        Review Request
                       </button>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="bg-zinc-50 p-4 rounded-2xl space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-zinc-500">Hourly Rate</span>
-                      <span className="font-bold text-zinc-900">KES {selectedWorker.hourly_rate}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-zinc-500">Service Fee</span>
-                      <span className="font-bold text-zinc-900">KES 100</span>
-                    </div>
-                    <div className="pt-3 border-t border-zinc-200 flex justify-between">
-                      <span className="font-bold text-zinc-900">Total Estimate</span>
-                      <span className="font-bold text-emerald-600">KES {selectedWorker.hourly_rate + 100}</span>
-                    </div>
-                  </div>
+                  {bookingStep === 'confirmation' && (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <button 
+                          onClick={() => setBookingStep('booking')}
+                          className="text-zinc-400 hover:text-zinc-900 transition-colors"
+                        >
+                          <ChevronRight className="w-5 h-5 rotate-180" />
+                        </button>
+                        <h3 className="text-lg font-bold text-zinc-900 text-center flex-1">Review Your Request</h3>
+                      </div>
 
-                  <button 
-                    onClick={handleBook}
-                    disabled={booking || !jobDescription}
-                    className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {booking ? 'Sending Request...' : 'Confirm Request'}
-                  </button>
+                      <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-3xl space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Worker</p>
+                            <p className="text-sm font-bold text-zinc-900">{selectedWorker.name}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Service</p>
+                            <p className="text-sm font-bold text-zinc-900">{selectedWorker.category}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Date & Time</p>
+                            <p className="text-sm font-bold text-zinc-900">{new Date(preferredDate).toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Urgency</p>
+                            <p className="text-sm font-bold text-zinc-900 capitalize">{urgency}</p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Description</p>
+                          <p className="text-sm text-zinc-700 leading-relaxed">{jobDescription}</p>
+                        </div>
+
+                        {photos.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Attached Photos ({photos.length})</p>
+                            <div className="flex gap-2 overflow-x-auto pb-1">
+                              {photos.map((p, i) => (
+                                <img key={i} src={p} className="w-12 h-12 rounded-lg object-cover border border-emerald-200" />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-4 border-t border-emerald-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-bold text-emerald-700">Total Estimate</span>
+                            <span className="text-xl font-black text-emerald-600">KES {selectedWorker.hourly_rate + 100}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3">
+                        <button 
+                          onClick={handleBook}
+                          disabled={booking}
+                          className="w-full bg-emerald-600 text-white py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2"
+                        >
+                          {booking ? (
+                            <>
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-5 h-5" />
+                              Confirm & Send Request
+                            </>
+                          )}
+                        </button>
+                        <button 
+                          onClick={() => setBookingStep('booking')}
+                          className="w-full py-3 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors"
+                        >
+                          Edit Details
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>

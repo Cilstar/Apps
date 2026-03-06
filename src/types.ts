@@ -15,6 +15,7 @@ export interface WorkerProfile {
   category: string;
   experience_years: number;
   bio: string;
+  location: string;
   profile_photo: string;
   hourly_rate: number;
   latitude: number;
@@ -25,6 +26,7 @@ export interface WorkerProfile {
   portfolio?: string; // JSON string of URLs
   documents?: string; // JSON string of URLs
   avg_rating?: number;
+  review_count?: number;
   name?: string; // From join
   phone?: string; // From join
 }
