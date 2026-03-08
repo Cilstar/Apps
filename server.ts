@@ -128,6 +128,9 @@ const migrate = () => {
   if (!jobColumns.find(c => c.name === 'photos')) {
     db.exec("ALTER TABLE job_requests ADD COLUMN photos TEXT");
   }
+  if (!jobColumns.find(c => c.name === 'urgency')) {
+    db.exec("ALTER TABLE job_requests ADD COLUMN urgency TEXT DEFAULT 'medium'");
+  }
   if (!jobColumns.find(c => c.name === 'status')) {
     db.exec("ALTER TABLE job_requests ADD COLUMN status TEXT DEFAULT 'pending'");
   }

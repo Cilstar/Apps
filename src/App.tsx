@@ -29,7 +29,8 @@ import {
   Sparkles,
   Palette,
   Cpu,
-  Droplets
+  Droplets,
+  Navigation
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -847,6 +848,20 @@ const FindWorker = ({ user }: { user: User }) => {
             ))}
           </div>
 
+          {(category || searchQuery || locationQuery) && (
+            <button 
+              onClick={() => {
+                setCategory('');
+                setSearchQuery('');
+                setLocationQuery('');
+              }}
+              className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 transition-colors border border-red-100"
+            >
+              <X className="w-3 h-3" />
+              Clear All Filters
+            </button>
+          )}
+
           {/* Live Feed */}
           <div className="mt-12 p-6 bg-zinc-900 rounded-[2rem] text-white">
             <div className="flex items-center gap-2 mb-4">
@@ -904,15 +919,22 @@ const FindWorker = ({ user }: { user: User }) => {
                   className="w-full pl-10 pr-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm bg-white"
                 />
               </div>
-              <div className="relative flex-1 sm:w-64">
-                <MapPin className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <div className="relative flex-1 sm:w-64 group">
+                <MapPin className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-emerald-500 transition-colors" />
                 <input 
                   type="text" 
                   value={locationQuery}
                   onChange={(e) => setLocationQuery(e.target.value)}
                   placeholder="Enter your area..."
-                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm bg-white"
+                  className="w-full pl-10 pr-12 py-3 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm bg-white"
                 />
+                <button 
+                  onClick={() => setLocationQuery('Roysambu, Nairobi')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600 hover:text-emerald-700 p-1 rounded-lg hover:bg-emerald-50 transition-all"
+                  title="Use my location"
+                >
+                  <Navigation className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
